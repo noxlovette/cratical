@@ -76,9 +76,8 @@ impl Lexer {
         // Owned rather than the `Cow` `fold_upper` returns: it borrows
         // `self.source`, and the match arms below need `&mut self`, which a
         // live borrow of one of `self`'s fields would block.
-        let name =
-            Self::fold_upper(&self.source[self.start..self.current])
-                .into_owned();
+        let name = Self::fold_upper(&self.source[self.start..self.current])
+            .into_owned();
 
         match name.as_slice() {
             b"BEGIN" => self.component(TokenType::Begin),

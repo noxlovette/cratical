@@ -1,4 +1,8 @@
 use crate::{
+    ast::{
+        Lexer, LexerError,
+        parser::{ParseError, Parser},
+    },
     components::{
         event::Event, free_busy::FreeBusy, journal::Journal,
         timezone::Timezone, todo::Todo,
@@ -75,4 +79,32 @@ impl Calendar {
     pub fn components(&self) -> &[Component] {
         &self.components
     }
+
+    /// Parses one `BEGIN:VCALENDAR ... END:VCALENDAR` iCalendar object (RFC
+    /// 5545 §3.4/§3.6) from raw bytes.
+    ///
+    /// This is the public entry point into the crate's parser: it tokenizes
+    /// `src` and builds a [`Calendar`] from it, running every cross-field
+    /// validation deferred to `build()` (see the [`crate::ast`] module docs).
+    /// A stream containing more than one `icalobject` back to back isn't
+    /// supported by this function — it parses exactly one `VCALENDAR` and
+    /// errors if anything follows.
+    pub fn parse(src: &[u8]) -> Result<Self, CalendarParseError> {
+        let tokens = Lexer::new(src).scan()?;
+        Parser::new(tokens).calendar().map_err(Into::into)
+    }
+}
+
+/// Error returned by [`Calendar::parse`] when an iCalendar byte stream fails
+/// to parse, either because it can't be tokenized at all (`Lexer`) or
+/// because the resulting tokens don't form a valid iCalendar object
+/// (`Parse`).
+#[derive(Debug, thiserror::Error)]
+pub enum CalendarParseError {
+    /// The raw input couldn't be tokenized.
+    #[error(transparent)]
+    Lexer(#[from] LexerError),
+    /// The token stream didn't form a valid iCalendar object.
+    #[error(transparent)]
+    Parse(#[from] ParseError),
 }

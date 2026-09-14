@@ -51,8 +51,12 @@ impl TryFrom<&[u8]> for Attachment {
         };
         if mismatch {
             return Err(ValueError::Malformed {
-                expected: "ATTACH value shape consistent with its ENCODING/VALUE params".into(),
-                received: std::str::from_utf8(&v[colon + 1..]).ok().map(Into::into),
+                expected: "ATTACH value shape consistent with its \
+                           ENCODING/VALUE params"
+                    .into(),
+                received: std::str::from_utf8(&v[colon + 1..])
+                    .ok()
+                    .map(Into::into),
             }
             .into());
         }

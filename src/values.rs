@@ -1623,10 +1623,8 @@ mod tests {
     #[test]
     fn text_unescapes_backslash_sequences() {
         // RFC 5545 §3.3.11: \\ -> \, \; -> ;, \, -> ,, \n and \N -> newline.
-        let text = Text::try_from(
-            b"a\\\\b,c\\;d\\,e\\nf\\Ng".as_slice(),
-        )
-        .unwrap();
+        let text =
+            Text::try_from(b"a\\\\b,c\\;d\\,e\\nf\\Ng".as_slice()).unwrap();
         assert_eq!(text.as_str(), "a\\b,c;d,e\nf\ng");
     }
 
@@ -1637,5 +1635,4 @@ mod tests {
         let text = Text::try_from(b"C:\\at".as_slice()).unwrap();
         assert_eq!(text.as_str(), "C:\\at");
     }
-
 }

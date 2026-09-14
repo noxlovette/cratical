@@ -77,6 +77,24 @@ Vec<TzPropBuilder>`).
 
 Tests are written test-driven: they assert what the code's behavior MUST be per RFC 5545 (or the type's documented contract), not what the current implementation happens to do. Never write a test by running the code and copying its output into the assertion — that encodes bugs as spec. If a test fails against current code, the test is correct and the code is wrong; fix the code, don't loosen the test.
 
+### `tests/fixtures/` is untouchable
+
+Every file under `tests/fixtures/` is ground truth, not a knob to turn when a
+test fails. This includes the hand-authored `rfc5545/`/`rrule/` fixtures as
+much as the imported `collective-icalendar/`/`libical/`/`libical-fuzz-corpus/`
+corpora. **Never edit, "fix", regenerate, delete, or add fields to a fixture
+file to make a failing test pass** — that's the exact same violation as
+loosening an assertion, just laundered through a `.ics` file instead of a
+`#[test]` body. If a fixture fails to parse (or parses wrong), the crate is
+wrong and the fixture stays exactly as it is; fix `src/`, not
+`tests/fixtures/`. This applies even when the fixture looks like it could
+plausibly be "improved" (e.g. adding a `VTIMEZONE` block, adding a missing
+required property) — that instinct is backwards here.
+
+The one exception: adding genuinely new files to the corpus (e.g. importing
+another upstream test suite) is fine. Editing or removing an existing one is
+not.
+
 ## Documentation conventions
 
 Every public type and property struct/enum must have a doc comment that:

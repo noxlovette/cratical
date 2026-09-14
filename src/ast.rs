@@ -1,6 +1,7 @@
 mod lexer;
 pub mod parser;
 mod token;
+pub(crate) use lexer::{Lexer, LexerError};
 use parser::{ParseError, ParseResult};
 
 use crate::{
@@ -282,19 +283,23 @@ fn check_exdate_matches_dtstart(
     dtstart: Option<&DateTimeStart>,
     exdate: &[ExceptionDateTimes],
 ) -> Result<(), ComponentError> {
-    let Some(dtstart) = dtstart else { return Ok(()) };
-    let matches_type = exdate.iter().flat_map(ExceptionDateTimes::value).all(
-        |value| {
-            matches!(
-                (dtstart.value(), value),
-                (DateOrDatetime::Date(_), DateOrDatetime::Date(_))
-                    | (
-                        DateOrDatetime::DateTime(_),
-                        DateOrDatetime::DateTime(_)
-                    )
-            )
-        },
-    );
+    let Some(dtstart) = dtstart else {
+        return Ok(());
+    };
+    let matches_type =
+        exdate
+            .iter()
+            .flat_map(ExceptionDateTimes::value)
+            .all(|value| {
+                matches!(
+                    (dtstart.value(), value),
+                    (DateOrDatetime::Date(_), DateOrDatetime::Date(_))
+                        | (
+                            DateOrDatetime::DateTime(_),
+                            DateOrDatetime::DateTime(_)
+                        )
+                )
+            });
     if matches_type {
         Ok(())
     } else {
@@ -310,19 +315,24 @@ fn check_rdate_matches_dtstart(
     dtstart: Option<&DateTimeStart>,
     rdate: &[RecurrenceDateTimes],
 ) -> Result<(), ComponentError> {
-    let Some(dtstart) = dtstart else { return Ok(()) };
+    let Some(dtstart) = dtstart else {
+        return Ok(());
+    };
     let matches_type =
-        rdate.iter().flat_map(RecurrenceDateTimes::value).all(|value| {
-            matches!(
-                (dtstart.value(), value),
-                (DateOrDatetime::Date(_), DateTimePeriod::Date(_))
-                    | (
-                        DateOrDatetime::DateTime(_),
-                        DateTimePeriod::DateTime(_)
-                    )
-                    | (_, DateTimePeriod::Period(_))
-            )
-        });
+        rdate
+            .iter()
+            .flat_map(RecurrenceDateTimes::value)
+            .all(|value| {
+                matches!(
+                    (dtstart.value(), value),
+                    (DateOrDatetime::Date(_), DateTimePeriod::Date(_))
+                        | (
+                            DateOrDatetime::DateTime(_),
+                            DateTimePeriod::DateTime(_)
+                        )
+                        | (_, DateTimePeriod::Period(_))
+                )
+            });
     if matches_type {
         Ok(())
     } else {
@@ -820,7 +830,9 @@ impl CalendarBuilder {
 /// needs every component's date/time properties, the second needs every
 /// `VTIMEZONE` — so this runs once in `CalendarBuilder::build`, after every
 /// component has already been individually validated and built.
-fn validate_timezones(components: &[CalComponent]) -> Result<(), ComponentError> {
+fn validate_timezones(
+    components: &[CalComponent],
+) -> Result<(), ComponentError> {
     let mut declared = HashSet::new();
     for c in components {
         if let CalComponent::Timezone(tz) = c {
@@ -833,9 +845,9 @@ fn validate_timezones(components: &[CalComponent]) -> Result<(), ComponentError>
 
     let check = |tzid: Option<&TzIdParam>| -> Result<(), ComponentError> {
         match tzid {
-            Some(tzid) if !declared.contains(tzid.name()) => Err(
-                ComponentError::UndeclaredTimeZone(tzid.name().into()),
-            ),
+            Some(tzid) if !declared.contains(tzid.name()) => {
+                Err(ComponentError::UndeclaredTimeZone(tzid.name().into()))
+            }
             _ => Ok(()),
         }
     };
@@ -888,10 +900,9 @@ fn validate_no_duplicate_uid(
             CalComponent::Event(e) => {
                 (e.uid.as_str(), e.recurid.as_ref().map(RecurrenceId::value))
             }
-            CalComponent::Todo(t) => (
-                t.uid.as_str(),
-                t.recur_id.as_ref().map(RecurrenceId::value),
-            ),
+            CalComponent::Todo(t) => {
+                (t.uid.as_str(), t.recur_id.as_ref().map(RecurrenceId::value))
+            }
             CalComponent::Journal(j) => {
                 (j.uid.as_str(), j.recurid.as_ref().map(RecurrenceId::value))
             }
@@ -945,7 +956,8 @@ pub enum ComponentError {
     /// A `TZID` parameter was used somewhere in the `VCALENDAR` without a
     /// matching `VTIMEZONE` component defining it (RFC 5545 §3.6.5).
     #[error(
-        "TZID={0} is used but no VTIMEZONE component defines it in this VCALENDAR"
+        "TZID={0} is used but no VTIMEZONE component defines it in this \
+         VCALENDAR"
     )]
     UndeclaredTimeZone(String),
 
@@ -961,7 +973,8 @@ pub enum ComponentError {
     /// components claiming the very same instance (or both claiming to be
     /// the master) can't both be right.
     #[error(
-        "UID={0} is shared by more than one component with the same RECURRENCE-ID"
+        "UID={0} is shared by more than one component with the same \
+         RECURRENCE-ID"
     )]
     DuplicateUid(String),
 }
@@ -1024,7 +1037,10 @@ impl EventBuilder {
         if self.dtend.is_some() && self.duration.is_some() {
             return Err(ComponentError::MutuallyExclusive("DTEND", "DURATION"));
         }
-        check_until_matches_dtstart(self.dtstart.as_ref(), self.rrule.as_ref())?;
+        check_until_matches_dtstart(
+            self.dtstart.as_ref(),
+            self.rrule.as_ref(),
+        )?;
         check_value_type_matches_dtstart(
             self.dtstart.as_ref(),
             self.dtend.as_ref().map(DateTimeEnd::value),
@@ -1199,7 +1215,10 @@ impl TodoBuilder {
         if self.duration.is_some() && self.dtstart.is_none() {
             return Err(ComponentError::Requires("DURATION", "DTSTART"));
         }
-        check_until_matches_dtstart(self.dtstart.as_ref(), self.rrule.as_ref())?;
+        check_until_matches_dtstart(
+            self.dtstart.as_ref(),
+            self.rrule.as_ref(),
+        )?;
         check_value_type_matches_dtstart(
             self.dtstart.as_ref(),
             self.due.as_ref().map(DateTimeDue::value),
@@ -1548,7 +1567,10 @@ impl JournalBuilder {
     /// Validates the cross-field rules RFC 5545 §3.6.3 places on
     /// `VJOURNAL` and assembles the finished [`Journal`].
     fn build(self) -> Result<Journal, ComponentError> {
-        check_until_matches_dtstart(self.dtstart.as_ref(), self.rrule.as_ref())?;
+        check_until_matches_dtstart(
+            self.dtstart.as_ref(),
+            self.rrule.as_ref(),
+        )?;
         check_exdate_matches_dtstart(self.dtstart.as_ref(), &self.exdate)?;
         check_rdate_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
         Ok(Journal {
@@ -1785,7 +1807,10 @@ impl TzPropBuilder {
     /// Validates the `tzprop` grammar's required fields (RFC 5545 §3.6.5)
     /// and assembles the finished [`TzProp`].
     fn build(self) -> Result<TzProp, ComponentError> {
-        check_until_matches_dtstart(self.dtstart.as_ref(), self.rrule.as_ref())?;
+        check_until_matches_dtstart(
+            self.dtstart.as_ref(),
+            self.rrule.as_ref(),
+        )?;
         check_rdate_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
         Ok(TzProp {
             dtstart: self
@@ -1899,7 +1924,8 @@ mod build_tests {
     fn event_rrule_until_must_match_dtstart_value_type() {
         // minimal_event's DTSTART is DATE-TIME; UNTIL here is DATE.
         let mut b = minimal_event();
-        b.ingest(prop(b"RRULE", b":FREQ=DAILY;UNTIL=19971224")).unwrap();
+        b.ingest(prop(b"RRULE", b":FREQ=DAILY;UNTIL=19971224"))
+            .unwrap();
         assert!(matches!(
             b.build(true),
             Err(ComponentError::MismatchedValueType(
@@ -2173,7 +2199,8 @@ mod build_tests {
     fn tz_prop_rrule_until_must_match_dtstart_value_type() {
         // minimal_tz_prop's DTSTART is DATE-TIME; UNTIL here is DATE.
         let mut b = minimal_tz_prop();
-        b.ingest(prop(b"RRULE", b":FREQ=YEARLY;UNTIL=20070311")).unwrap();
+        b.ingest(prop(b"RRULE", b":FREQ=YEARLY;UNTIL=20070311"))
+            .unwrap();
         assert!(matches!(
             b.build(),
             Err(ComponentError::MismatchedValueType(
@@ -2351,8 +2378,10 @@ mod build_tests {
 
     #[test]
     fn calendar_rejects_two_components_sharing_uid_and_no_recurrence_id() {
-        let cal =
-            minimal_calendar(vec![minimal_event().into(), minimal_event().into()]);
+        let cal = minimal_calendar(vec![
+            minimal_event().into(),
+            minimal_event().into(),
+        ]);
         assert!(matches!(
             cal.build(),
             Err(ComponentError::DuplicateUid(uid))
