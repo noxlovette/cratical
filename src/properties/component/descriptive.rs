@@ -638,4 +638,18 @@ mod tests {
             .unwrap();
         assert_eq!(geo.params.xname.len(), 1);
     }
+
+    #[test]
+    fn categories_splits_on_unescaped_commas_only() {
+        // Regression test for issue #2: a naive byte-level `,` split would
+        // cut "Meeting\, John" into two elements instead of treating the
+        // escaped comma as part of a single category.
+        let categories = Categories::try_from(
+            b":Meeting\\, John,Work\\, Sarah,Project".as_slice(),
+        )
+        .unwrap();
+        let values: Vec<&str> =
+            categories.value.iter().map(|t| t.as_str()).collect();
+        assert_eq!(values, ["Meeting, John", "Work, Sarah", "Project"]);
+    }
 }

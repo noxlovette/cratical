@@ -65,8 +65,8 @@ macro_rules! impl_try_from_bytes_list {
             fn try_from(v: &[u8]) -> Result<Self, Self::Error> {
                 let colon = crate::properties::value_start(v)?;
                 let params = <$param_ty>::try_from(&v[..colon])?;
-                let value = v[colon + 1..]
-                    .split(|&b| b == b',')
+                let value = crate::ast::split_unescaped(&v[colon + 1..], b',')
+                    .into_iter()
                     .map(<$elem_ty>::try_from)
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(Self { value, params })

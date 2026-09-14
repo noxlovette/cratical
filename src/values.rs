@@ -1308,8 +1308,36 @@ impl TryFrom<&[u8]> for Text {
     type Error = ValueError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        Ok(std::str::from_utf8(value)?.into())
+        Ok(Self(unescape_text(std::str::from_utf8(value)?)))
     }
+}
+
+/// Decodes the BACKSLASH-escape sequences defined for `TEXT` values by
+/// [Section 3.3.11](https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.11):
+/// `\\` -> `\`, `\;` -> `;`, `\,` -> `,`, and `\N`/`\n` -> a newline. A
+/// backslash followed by anything else isn't a defined escape, so it's left
+/// as-is (the backslash retained) rather than silently dropped.
+fn unescape_text(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.peek() {
+            Some('\\') => out.push('\\'),
+            Some(';') => out.push(';'),
+            Some(',') => out.push(','),
+            Some('n') | Some('N') => out.push('\n'),
+            _ => {
+                out.push('\\');
+                continue;
+            }
+        }
+        chars.next();
+    }
+    out
 }
 
 impl TryFrom<&[u8]> for Uri {
@@ -1591,4 +1619,23 @@ mod tests {
             Recur::try_from(b"FREQ=SECONDLY;BYSECOND=61".as_slice()).is_err()
         );
     }
+
+    #[test]
+    fn text_unescapes_backslash_sequences() {
+        // RFC 5545 §3.3.11: \\ -> \, \; -> ;, \, -> ,, \n and \N -> newline.
+        let text = Text::try_from(
+            b"a\\\\b,c\\;d\\,e\\nf\\Ng".as_slice(),
+        )
+        .unwrap();
+        assert_eq!(text.as_str(), "a\\b,c;d,e\nf\ng");
+    }
+
+    #[test]
+    fn text_leaves_undefined_escapes_untouched() {
+        // No escape is defined for e.g. \a, so the backslash is kept as-is
+        // rather than silently dropped.
+        let text = Text::try_from(b"C:\\at".as_slice()).unwrap();
+        assert_eq!(text.as_str(), "C:\\at");
+    }
+
 }

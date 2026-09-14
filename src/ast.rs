@@ -52,6 +52,36 @@ pub(crate) fn find_unquoted(b: &[u8], needle: u8) -> Option<usize> {
     None
 }
 
+/// Splits `b` on every *unescaped* occurrence of `needle`, per the
+/// BACKSLASH-escaping grammar of [Section
+/// 3.3.11](https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.11): a
+/// `needle` byte immediately preceded by an (unescaped) `\` is part of an
+/// escape sequence, not a delimiter, and is left untouched for the
+/// caller — typically [`crate::values::Text`]'s own unescaping — to decode.
+/// Used to COMMA-split `TEXT`-valued lists (e.g. `CATEGORIES`) without
+/// splitting inside an escaped `\,`.
+pub(crate) fn split_unescaped(bytes: &[u8], needle: u8) -> Vec<&[u8]> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    let mut escaped = false;
+    for (i, &byte) in bytes.iter().enumerate() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match byte {
+            b'\\' => escaped = true,
+            b if b == needle => {
+                parts.push(&bytes[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(&bytes[start..]);
+    parts
+}
+
 /// Checks if a given value is in quotes and returns that value with the
 /// quotes stripped. `None` if it isn't quoted — error-agnostic, see
 /// [`split_once`].
