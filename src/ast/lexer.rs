@@ -24,11 +24,18 @@ pub struct Lexer {
 impl Lexer {
     /// creates a new [Lexer] out of a source
     ///
-    /// `src` is unfolded (RFC 5545 §3.1: CRLF followed by a single SPACE/HTAB
-    /// is a soft line break, not a real one) before scanning ever sees it, so
-    /// every downstream token position is a *logical* (post-unfolding)
-    /// content line rather than a raw physical one.
+    /// A leading UTF-8 byte-order mark (`EF BB BF`), if present, is
+    /// stripped before anything else. RFC 5545 doesn't mention BOMs either
+    /// way, but real-world `.ics` exports (Windows-originated tools in
+    /// particular) sometimes carry one, and it would otherwise corrupt the
+    /// very first `BEGIN` keyword match.
+    ///
+    /// `src` is then unfolded (RFC 5545 §3.1: CRLF followed by a single
+    /// SPACE/HTAB is a soft line break, not a real one) before scanning
+    /// ever sees it, so every downstream token position is a *logical*
+    /// (post-unfolding) content line rather than a raw physical one.
     pub fn new(src: &[u8]) -> Self {
+        let src = src.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(src);
         Self {
             source: unfold::unfold(src),
             ..Default::default()

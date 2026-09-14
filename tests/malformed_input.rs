@@ -120,18 +120,19 @@ fn empty_rdate_under_unwrapped_daylight_is_preserved_verbatim() {
     }
 }
 
-/// A leading UTF-8 BOM (`EF BB BF`) before `BEGIN:VCALENDAR`. No BOM
-/// stripping exists in `src/ast/lexer.rs`, so the BOM bytes corrupt the
-/// `BEGIN` keyword match. Documents the current behavior (a lexer error,
-/// not a panic or a silent empty calendar) — RFC 5545 doesn't mandate BOM
-/// handling either way, so this pins down today's contract rather than
-/// asserting it's the ideal one.
+/// A leading UTF-8 BOM (`EF BB BF`) before `BEGIN:VCALENDAR`. Per issue
+/// #15, `Lexer::new` now strips a leading BOM before scanning, so this no
+/// longer corrupts the `BEGIN` keyword match. The fixture itself is still
+/// an otherwise-minimal, invalid calendar (no `PRODID`/`VERSION`/
+/// component), so parsing still fails overall — but now for that
+/// documented reason, as an ordinary `Parse` error, not a `Lexer` error
+/// caused by the BOM bytes themselves.
 #[test]
-fn leading_bom_is_a_lexer_error() {
+fn leading_bom_is_stripped_and_no_longer_corrupts_parsing() {
     let bytes = fixture("bom_calendar.ics");
     assert!(matches!(
         Calendar::parse(&bytes),
-        Err(CalendarParseError::Lexer(_))
+        Err(CalendarParseError::Parse(_))
     ));
 }
 

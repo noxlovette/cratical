@@ -268,6 +268,41 @@ fn lone_cr_not_followed_by_lf_still_errors_when_file_is_otherwise_lf_only() {
 }
 
 #[test]
+fn leading_utf8_bom_is_stripped_before_scanning() {
+    // See issue #15: a leading `EF BB BF` used to be fed straight into the
+    // scanner, corrupting the very first `BEGIN` keyword match.
+    let tokens = lex(b"\xEF\xBB\xBFBEGIN:VCALENDAR\r\n").unwrap();
+    assert_tokens(
+        tokens,
+        vec![
+            Token::new(TokenType::Begin, b"BEGIN", Some(b"VCALENDAR"), 0),
+            Token::new(TokenType::Crlf, b"\r\n", None, 0),
+            Token::new(TokenType::Eof, b"", None, 1),
+        ],
+    );
+}
+
+#[test]
+fn a_bom_elsewhere_in_the_source_is_left_alone() {
+    // Only a *leading* BOM is stripped — one occurring later (e.g. inside
+    // a property value) is ordinary content, not a marker to swallow.
+    let res = lex(b"UID:foo\xEF\xBB\xBFbar\r\n").unwrap();
+    assert_tokens(
+        res,
+        vec![
+            Token::new(
+                TokenType::Property,
+                b"UID",
+                Some(b":foo\xEF\xBB\xBFbar"),
+                0,
+            ),
+            Token::new(TokenType::Crlf, b"\r\n", None, 0),
+            Token::new(TokenType::Eof, b"", None, 1),
+        ],
+    );
+}
+
+#[test]
 fn folded_content_line_with_bare_lf_is_unfolded_before_scanning() {
     // Mirrors `folded_content_line_is_unfolded_before_scanning`, but for a
     // file whose fold sequences use bare `\n` + WSP instead of `\r\n` + WSP
