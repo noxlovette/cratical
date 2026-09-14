@@ -82,8 +82,8 @@ use crate::properties::{
 /// [Section 3.6.4](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.4)
 #[derive(Debug)]
 pub struct FreeBusy {
-    pub(crate) dtstamp: DateTimeStamp,
-    pub(crate) uid: Uid,
+    pub(crate) dtstamp: Option<DateTimeStamp>,
+    pub(crate) uid: Option<Uid>,
     pub(crate) contact: Option<Contact>,
     pub(crate) dtstart: Option<DateTimeStart>,
     pub(crate) dtend: Option<DateTimeEnd>,
@@ -98,14 +98,14 @@ pub struct FreeBusy {
 }
 
 impl FreeBusy {
-    /// The `DTSTAMP` property.
-    pub fn dtstamp(&self) -> &DateTimeStamp {
-        &self.dtstamp
+    /// The `DTSTAMP` property, if present.
+    pub fn dtstamp(&self) -> Option<&DateTimeStamp> {
+        self.dtstamp.as_ref()
     }
 
-    /// The `UID` property.
-    pub fn uid(&self) -> &Uid {
-        &self.uid
+    /// The `UID` property, if present.
+    pub fn uid(&self) -> Option<&Uid> {
+        self.uid.as_ref()
     }
 
     /// The `CONTACT` property, if present.

@@ -1611,10 +1611,8 @@ impl FreeBusyBuilder {
             "DTEND",
         )?;
         Ok(FreeBusy {
-            dtstamp: self
-                .dtstamp
-                .ok_or(ComponentError::MissingField("DTSTAMP"))?,
-            uid: self.uid.ok_or(ComponentError::MissingField("UID"))?,
+            dtstamp: self.dtstamp,
+            uid: self.uid,
             contact: self.contact,
             dtstart: self.dtstart,
             dtend: self.dtend,
