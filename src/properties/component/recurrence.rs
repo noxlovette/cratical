@@ -1,3 +1,5 @@
+use chrono_tz::Tz;
+
 use crate::{
     params::{TimeZoneIdentifier, ValueDataType},
     properties::{
@@ -42,6 +44,12 @@ impl ExceptionDateTimes {
     pub(crate) fn value(&self) -> &[DateOrDatetime] {
         &self.value
     }
+
+    /// This `EXDATE`'s `TZID` parameter, if any — used by `build()` to
+    /// cross-check it against the component's `DTSTART` (RFC 5545 §3.8.5.1).
+    pub(crate) fn tzid(&self) -> Option<Tz> {
+        self.params.tzid.as_ref().map(TimeZoneIdentifier::tz)
+    }
 }
 
 /// This property defines the list of DATE-TIME values for recurring events,
@@ -79,6 +87,12 @@ impl RecurrenceDateTimes {
     /// `DTSTART` (RFC 5545 §3.8.5.2).
     pub(crate) fn value(&self) -> &[DateTimePeriod] {
         &self.value
+    }
+
+    /// This `RDATE`'s `TZID` parameter, if any — used by `build()` to
+    /// cross-check it against the component's `DTSTART` (RFC 5545 §3.8.5.2).
+    pub(crate) fn tzid(&self) -> Option<Tz> {
+        self.params.tzid.as_ref().map(TimeZoneIdentifier::tz)
     }
 }
 

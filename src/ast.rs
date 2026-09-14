@@ -475,6 +475,47 @@ fn check_rdate_matches_dtstart(
     }
 }
 
+/// RFC 5545 §3.8.5.1 requires `EXDATE`'s value type to match `DTSTART`'s;
+/// real-world producers extend that to expecting the same `TZID` too (see
+/// issue #6) — a `DTSTART;TZID=America/New_York` paired with an
+/// `EXDATE;TZID=Europe/London` value (or one specifying no `TZID` at all)
+/// names a different wall-clock instant than intended, even though both are
+/// DATE-TIME. Checked once per `EXDATE` property occurrence (the `TZID`
+/// parameter applies once to the whole comma-separated value list).
+fn check_exdate_tzid_matches_dtstart(
+    dtstart: Option<&DateTimeStart>,
+    exdate: &[ExceptionDateTimes],
+) -> Result<(), ComponentError> {
+    let Some(dtstart) = dtstart else {
+        return Ok(());
+    };
+    let matches_tzid =
+        exdate.iter().all(|e| e.tzid() == dtstart.tzid());
+    if matches_tzid {
+        Ok(())
+    } else {
+        Err(ComponentError::MismatchedTzid("EXDATE", "DTSTART"))
+    }
+}
+
+/// RFC 5545 §3.8.5.2 requires `RDATE`'s value type to match `DTSTART`'s (or
+/// be `PERIOD`); real-world producers extend that to expecting the same
+/// `TZID` too when both are DATE-TIME (see [`check_exdate_tzid_matches_dtstart`]).
+fn check_rdate_tzid_matches_dtstart(
+    dtstart: Option<&DateTimeStart>,
+    rdate: &[RecurrenceDateTimes],
+) -> Result<(), ComponentError> {
+    let Some(dtstart) = dtstart else {
+        return Ok(());
+    };
+    let matches_tzid = rdate.iter().all(|r| r.tzid() == dtstart.tzid());
+    if matches_tzid {
+        Ok(())
+    } else {
+        Err(ComponentError::MismatchedTzid("RDATE", "DTSTART"))
+    }
+}
+
 /// A calendar property, wrapping every property type defined in
 /// [`crate::properties`].
 #[derive(Debug)]
@@ -1060,6 +1101,13 @@ pub enum ComponentError {
     #[error("{0}'s value type MUST match {1}'s (both DATE, or both DATE-TIME)")]
     MismatchedValueType(&'static str, &'static str),
 
+    /// `EXDATE`/`RDATE`'s `TZID` parameter, when either side specifies one,
+    /// didn't match the component's `DTSTART` (RFC 5545 §3.8.5.1/§3.8.5.2
+    /// require the value *type* to match; real-world producers extend that
+    /// to the zone itself — see issue #6).
+    #[error("{0}'s TZID MUST match {1}'s TZID")]
+    MismatchedTzid(&'static str, &'static str),
+
     /// The same `TZID` was defined by more than one `VTIMEZONE` component in
     /// one `VCALENDAR` (RFC 5545 §3.6.5: "an individual VTIMEZONE...MUST be
     /// specified for each unique TZID").
@@ -1147,6 +1195,11 @@ impl EventBuilder {
         )?;
         check_exdate_matches_dtstart(self.dtstart.as_ref(), &self.exdate)?;
         check_rdate_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
+        check_exdate_tzid_matches_dtstart(
+            self.dtstart.as_ref(),
+            &self.exdate,
+        )?;
+        check_rdate_tzid_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
         let alarms = self
             .alarms
             .into_iter()
@@ -1325,6 +1378,11 @@ impl TodoBuilder {
         )?;
         check_exdate_matches_dtstart(self.dtstart.as_ref(), &self.exdate)?;
         check_rdate_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
+        check_exdate_tzid_matches_dtstart(
+            self.dtstart.as_ref(),
+            &self.exdate,
+        )?;
+        check_rdate_tzid_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
         let alarms = self
             .alarms
             .into_iter()
@@ -1670,6 +1728,11 @@ impl JournalBuilder {
         )?;
         check_exdate_matches_dtstart(self.dtstart.as_ref(), &self.exdate)?;
         check_rdate_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
+        check_exdate_tzid_matches_dtstart(
+            self.dtstart.as_ref(),
+            &self.exdate,
+        )?;
+        check_rdate_tzid_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
         Ok(Journal {
             dtstamp: self
                 .dtstamp
@@ -1909,6 +1972,7 @@ impl TzPropBuilder {
             self.rrule.as_ref(),
         )?;
         check_rdate_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
+        check_rdate_tzid_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
         Ok(TzProp {
             dtstart: self
                 .dtstart
@@ -2095,6 +2159,80 @@ mod build_tests {
         let mut b = minimal_event();
         b.ingest(prop(b"RDATE", b":19970903T163000Z/PT2H")).unwrap();
         assert!(b.build(true).is_ok());
+    }
+
+    fn minimal_event_with_zoned_dtstart() -> EventBuilder {
+        let mut b = minimal_event();
+        b.dtstart = Some(
+            DateTimeStart::try_from(
+                b";TZID=America/New_York:20130907T120000".as_slice(),
+            )
+            .unwrap(),
+        );
+        b
+    }
+
+    #[test]
+    fn event_exdate_tzid_matching_dtstart_is_ok() {
+        // tests/fixtures/collective-icalendar/events/
+        // issue_112_missing_tzinfo_on_exdate.ics
+        let mut b = minimal_event_with_zoned_dtstart();
+        b.ingest(prop(
+            b"EXDATE",
+            b";TZID=America/New_York:20131012T120000",
+        ))
+        .unwrap();
+        b.ingest(prop(
+            b"EXDATE",
+            b";TZID=America/New_York:20131011T120000",
+        ))
+        .unwrap();
+        assert!(b.build(true).is_ok());
+    }
+
+    #[test]
+    fn event_exdate_tzid_must_match_dtstart_tzid() {
+        // Both DATE-TIME (value type matches), but different zones — a
+        // mismatch the value-type check alone can't catch.
+        let mut b = minimal_event_with_zoned_dtstart();
+        b.ingest(prop(b"EXDATE", b";TZID=Europe/London:20131012T120000"))
+            .unwrap();
+        assert!(matches!(
+            b.build(true),
+            Err(ComponentError::MismatchedTzid("EXDATE", "DTSTART"))
+        ));
+    }
+
+    #[test]
+    fn event_exdate_with_no_tzid_must_match_a_zoned_dtstart() {
+        // DTSTART carries a TZID but this EXDATE carries none — a
+        // UTC/floating value doesn't name the same instant/wall-clock time
+        // as the zoned DTSTART.
+        let mut b = minimal_event_with_zoned_dtstart();
+        b.ingest(prop(b"EXDATE", b":20131012T120000Z")).unwrap();
+        assert!(matches!(
+            b.build(true),
+            Err(ComponentError::MismatchedTzid("EXDATE", "DTSTART"))
+        ));
+    }
+
+    #[test]
+    fn event_rdate_tzid_matching_dtstart_is_ok() {
+        let mut b = minimal_event_with_zoned_dtstart();
+        b.ingest(prop(b"RDATE", b";TZID=America/New_York:20130914T120000"))
+            .unwrap();
+        assert!(b.build(true).is_ok());
+    }
+
+    #[test]
+    fn event_rdate_tzid_must_match_dtstart_tzid() {
+        let mut b = minimal_event_with_zoned_dtstart();
+        b.ingest(prop(b"RDATE", b";TZID=Europe/London:20130914T120000"))
+            .unwrap();
+        assert!(matches!(
+            b.build(true),
+            Err(ComponentError::MismatchedTzid("RDATE", "DTSTART"))
+        ));
     }
 
     fn minimal_todo() -> TodoBuilder {

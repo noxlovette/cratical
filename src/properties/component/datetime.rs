@@ -1,3 +1,5 @@
+use chrono_tz::Tz;
+
 use crate::{
     params::{Fbtype, TimeZoneIdentifier, ValueDataType},
     properties::{
@@ -156,6 +158,13 @@ impl DateTimeStart {
     /// `RRULE`'s `UNTIL` (RFC 5545 §3.3.10).
     pub(crate) fn value(&self) -> &DateOrDatetime {
         &self.value
+    }
+
+    /// This `DTSTART`'s `TZID` parameter, if any — used by component
+    /// builders to cross-check it against `EXDATE`/`RDATE`'s own `TZID`
+    /// (RFC 5545 §3.8.5.1/§3.8.5.2).
+    pub(crate) fn tzid(&self) -> Option<Tz> {
+        self.params.tz_identifier.as_ref().map(TimeZoneIdentifier::tz)
     }
 }
 
