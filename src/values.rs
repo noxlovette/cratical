@@ -1786,6 +1786,19 @@ mod tests {
     }
 
     #[test]
+    fn utc_offset_parses_seconds_precision() {
+        // tests/fixtures/collective-icalendar/timezones/
+        // issue_55_parse_error_on_utc_offset_with_seconds.ics has
+        // `TZOFFSETFROM:-075258` — the 6-digit HHMMSS branch is
+        // structurally supported but was never exercised by a test.
+        let off = UtcOffset::try_from(b"-075258".as_slice()).unwrap();
+        assert_eq!(
+            *off,
+            FixedOffset::west_opt(7 * 3600 + 52 * 60 + 58).unwrap()
+        );
+    }
+
+    #[test]
     fn integer_and_float_parse() {
         assert_eq!(*Integer::try_from(b"39".as_slice()).unwrap(), 39);
         assert_eq!(*Integer::try_from(b"-5".as_slice()).unwrap(), -5);

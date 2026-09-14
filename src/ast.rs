@@ -2476,6 +2476,23 @@ mod build_tests {
     }
 
     #[test]
+    fn dtstart_rejects_a_non_iana_tzid() {
+        // tests/fixtures/collective-icalendar/calendars/issue_218_bad_tzid.ics
+        // — `DTSTART;TZID=UTC+11:...`. `UTC+11` isn't an IANA zone name, so
+        // this must surface as a clear parse error rather than being
+        // silently accepted (see the `TimeZoneIdentifier` doc comment in
+        // `params.rs`).
+        assert!(matches!(
+            DateTimeStart::try_from(
+                b";TZID=UTC+11:20170228T230000".as_slice(),
+            ),
+            Err(ParseError::Parameters(ParameterError::Param(
+                crate::params::ParamError::Malformed { .. }
+            )))
+        ));
+    }
+
+    #[test]
     fn calendar_rejects_two_components_sharing_uid_and_no_recurrence_id() {
         let cal = minimal_calendar(vec![
             minimal_event().into(),

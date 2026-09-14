@@ -546,6 +546,20 @@ pub struct SentBy(CalendarUserAddress);
 /// For more information, see the sections on the value types [DateType] and
 /// [Time].
 ///
+/// This crate resolves `TZID` against [`chrono_tz::Tz`]'s IANA database
+/// rather than treating it as opaque text, so that a zoned `DATE-TIME` can be
+/// converted to its real UTC instant (RFC 5545 §3.3.5) instead of only ever
+/// being read back as floating local time. The RFC leaves the naming
+/// convention for `TZID` values unspecified (see the note above), so a
+/// deliberate choice follows from that: any `TZID` parameter value that
+/// isn't a name `chrono_tz` recognizes (a non-IANA alias, a Windows/Exchange
+/// zone name like `Eastern Standard Time`, a raw UTC offset like `UTC+11`, a
+/// display name, ...) is rejected with [`ParamError::Malformed`] rather than
+/// silently accepted as best-effort passthrough. Producers emitting such
+/// values are technically RFC-compliant (the RFC doesn't mandate IANA names)
+/// but this crate can't resolve their offset rules, so surfacing a clear
+/// parse error is preferable to guessing.
+///
 /// [Section 3.2.19](https://datatracker.ietf.org/doc/html/rfc5545#section-3.2.19)
 #[derive(Debug, Clone)]
 pub struct TimeZoneIdentifier(Tz);
@@ -1068,4 +1082,66 @@ pub enum ParamError {
     /// Encoding error surfaced while decoding a param's raw bytes as UTF-8.
     #[error(transparent)]
     Utf8(#[from] std::str::Utf8Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tzid_accepts_a_clean_iana_zone_name() {
+        let tz = TimeZoneIdentifier::try_from(b"America/New_York".as_slice())
+            .unwrap();
+        assert_eq!(tz.tz(), Tz::America__New_York);
+    }
+
+    // RFC 5545 issue #5: TZID leans entirely on chrono_tz's own leniency,
+    // so these fixture-derived shapes must be confirmed to hit the
+    // `Malformed` error path rather than silently passing through as some
+    // best-effort guess (see the doc comment on `TimeZoneIdentifier`).
+
+    #[test]
+    fn tzid_rejects_a_raw_utc_offset() {
+        // tests/fixtures/collective-icalendar/calendars/issue_218_bad_tzid.ics
+        assert!(matches!(
+            TimeZoneIdentifier::try_from(b"UTC+11".as_slice()),
+            Err(ParamError::Malformed { .. })
+        ));
+    }
+
+    #[test]
+    fn tzid_rejects_a_space_instead_of_underscore() {
+        // tests/fixtures/collective-icalendar/timezones/
+        // issue_55_parse_error_on_utc_offset_with_seconds.ics
+        assert!(matches!(
+            TimeZoneIdentifier::try_from(
+                b"America/Los Angeles".as_slice()
+            ),
+            Err(ParamError::Malformed { .. })
+        ));
+    }
+
+    #[test]
+    fn tzid_rejects_a_non_ascii_display_name() {
+        // tests/fixtures/collective-icalendar/timezones/
+        // issue_237_brazilia_standard.ics
+        assert!(matches!(
+            TimeZoneIdentifier::try_from(
+                "(UTC-03:00) Brasília".as_bytes()
+            ),
+            Err(ParamError::Malformed { .. })
+        ));
+    }
+
+    #[test]
+    fn tzid_rejects_a_windows_exchange_zone_name() {
+        // tests/fixtures/collective-icalendar/calendars/
+        // issue_836_do_not_quote_tzid.ics
+        assert!(matches!(
+            TimeZoneIdentifier::try_from(
+                b"Eastern Standard Time".as_slice()
+            ),
+            Err(ParamError::Malformed { .. })
+        ));
+    }
 }
