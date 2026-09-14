@@ -357,162 +357,144 @@ fn set_once<T>(
     Ok(())
 }
 
-/// RFC 5545 §3.3.10: `RRULE`'s `UNTIL` rule part "MUST have the same value
-/// type as the 'DTSTART' property". Checked here, once both are known,
-/// rather than in `Recur::try_from` — which parses `RRULE` on its own and
-/// has no access to the sibling `DTSTART`.
-fn check_until_matches_dtstart(
-    dtstart: Option<&DateTimeStart>,
-    rrule: Option<&RRule>,
-) -> Result<(), ComponentError> {
-    let (Some(dtstart), Some(rrule)) = (dtstart, rrule) else {
-        return Ok(());
-    };
-    let Some(until) = rrule.recur().until() else {
-        return Ok(());
-    };
-    let matches_type = matches!(
-        (dtstart.value(), until),
-        (DateOrDatetime::Date(_), DateOrDatetime::Date(_))
-            | (DateOrDatetime::DateTime(_), DateOrDatetime::DateTime(_))
-    );
-    if matches_type {
-        Ok(())
-    } else {
-        Err(ComponentError::MismatchedValueType(
-            "RRULE's UNTIL",
-            "DTSTART",
-        ))
+/// Cross-field comparisons between a component's `DTSTART` and its sibling
+/// properties. Deferred to `build()` (per this crate's validation
+/// architecture — see `CLAUDE.md`), once every property on the component is
+/// known, rather than living on `DateTimeStart` itself or on the sibling
+/// type, neither of which has access to the other at parse time.
+impl DateTimeStart {
+    /// RFC 5545 §3.8.2.2/§3.8.2.3: `DTEND`'s and `DUE`'s value type "MUST be
+    /// the same value type as the 'DTSTART' property". `name` is used only
+    /// for the error message, so this doubles as the implementation of
+    /// [`Self::cmp_until`].
+    fn cmp_value_type(
+        &self,
+        other: Option<&DateOrDatetime>,
+        name: &'static str,
+    ) -> Result<(), ComponentError> {
+        let Some(other) = other else {
+            return Ok(());
+        };
+        let matches_type = matches!(
+            (self.value(), other),
+            (DateOrDatetime::Date(_), DateOrDatetime::Date(_))
+                | (DateOrDatetime::DateTime(_), DateOrDatetime::DateTime(_))
+        );
+        if matches_type {
+            Ok(())
+        } else {
+            Err(ComponentError::MismatchedValueType(name, "DTSTART"))
+        }
     }
-}
 
-/// RFC 5545 §3.8.2.2/§3.8.2.3: `DTEND`'s and `DUE`'s value type "MUST be the
-/// same value type as the 'DTSTART' property". Same shape as
-/// [`check_until_matches_dtstart`], generalized over which property is being
-/// compared to `DTSTART` (`name` is used only for the error message).
-fn check_value_type_matches_dtstart(
-    dtstart: Option<&DateTimeStart>,
-    other: Option<&DateOrDatetime>,
-    name: &'static str,
-) -> Result<(), ComponentError> {
-    let (Some(dtstart), Some(other)) = (dtstart, other) else {
-        return Ok(());
-    };
-    let matches_type = matches!(
-        (dtstart.value(), other),
-        (DateOrDatetime::Date(_), DateOrDatetime::Date(_))
-            | (DateOrDatetime::DateTime(_), DateOrDatetime::DateTime(_))
-    );
-    if matches_type {
-        Ok(())
-    } else {
-        Err(ComponentError::MismatchedValueType(name, "DTSTART"))
+    /// RFC 5545 §3.3.10: `RRULE`'s `UNTIL` rule part "MUST have the same
+    /// value type as the 'DTSTART' property". Checked here, once both are
+    /// known, rather than in `Recur::try_from` — which parses `RRULE` on its
+    /// own and has no access to the sibling `DTSTART`.
+    fn cmp_until(&self, rrule: Option<&RRule>) -> Result<(), ComponentError> {
+        let Some(rrule) = rrule else {
+            return Ok(());
+        };
+        let Some(until) = rrule.recur().until() else {
+            return Ok(());
+        };
+        self.cmp_value_type(Some(until), "RRULE's UNTIL")
     }
-}
 
-/// RFC 5545 §3.8.5.1: "The value type of this property MUST be the same as
-/// the value type of the 'DTSTART' property" — checked once per `EXDATE`
-/// value listed across every `EXDATE` property on the component (`EXDATE`
-/// takes a comma-separated list, and a component MAY repeat the property).
-fn check_exdate_matches_dtstart(
-    dtstart: Option<&DateTimeStart>,
-    exdate: &[ExceptionDateTimes],
-) -> Result<(), ComponentError> {
-    let Some(dtstart) = dtstart else {
-        return Ok(());
-    };
-    let matches_type =
-        exdate
-            .iter()
-            .flat_map(ExceptionDateTimes::value)
-            .all(|value| {
-                matches!(
-                    (dtstart.value(), value),
-                    (DateOrDatetime::Date(_), DateOrDatetime::Date(_))
-                        | (
-                            DateOrDatetime::DateTime(_),
-                            DateOrDatetime::DateTime(_)
-                        )
-                )
-            });
-    if matches_type {
-        Ok(())
-    } else {
-        Err(ComponentError::MismatchedValueType("EXDATE", "DTSTART"))
+    /// RFC 5545 §3.8.5.1: "The value type of this property MUST be the same
+    /// as the value type of the 'DTSTART' property" — checked once per
+    /// `EXDATE` value listed across every `EXDATE` property on the
+    /// component (`EXDATE` takes a comma-separated list, and a component
+    /// MAY repeat the property).
+    fn cmp_exdate(
+        &self,
+        exdate: &[ExceptionDateTimes],
+    ) -> Result<(), ComponentError> {
+        let matches_type =
+            exdate
+                .iter()
+                .flat_map(ExceptionDateTimes::value)
+                .all(|value| {
+                    matches!(
+                        (self.value(), value),
+                        (DateOrDatetime::Date(_), DateOrDatetime::Date(_))
+                            | (
+                                DateOrDatetime::DateTime(_),
+                                DateOrDatetime::DateTime(_)
+                            )
+                    )
+                });
+        if matches_type {
+            Ok(())
+        } else {
+            Err(ComponentError::MismatchedValueType("EXDATE", "DTSTART"))
+        }
     }
-}
 
-/// RFC 5545 §3.8.5.2: "The value type of the 'RDATE' property, if specified,
-/// MUST be the same as the 'DTSTART' property, or its value type must be
-/// PERIOD" — a `PERIOD` value is always allowed regardless of `DTSTART`'s
-/// value type, unlike `EXDATE`, which has no `PERIOD` alternative.
-fn check_rdate_matches_dtstart(
-    dtstart: Option<&DateTimeStart>,
-    rdate: &[RecurrenceDateTimes],
-) -> Result<(), ComponentError> {
-    let Some(dtstart) = dtstart else {
-        return Ok(());
-    };
-    let matches_type =
-        rdate
-            .iter()
-            .flat_map(RecurrenceDateTimes::value)
-            .all(|value| {
-                matches!(
-                    (dtstart.value(), value),
-                    (DateOrDatetime::Date(_), DateTimePeriod::Date(_))
-                        | (
-                            DateOrDatetime::DateTime(_),
-                            DateTimePeriod::DateTime(_)
-                        )
-                        | (_, DateTimePeriod::Period(_))
-                )
-            });
-    if matches_type {
-        Ok(())
-    } else {
-        Err(ComponentError::MismatchedValueType("RDATE", "DTSTART"))
+    /// RFC 5545 §3.8.5.2: "The value type of the 'RDATE' property, if
+    /// specified, MUST be the same as the 'DTSTART' property, or its value
+    /// type must be PERIOD" — a `PERIOD` value is always allowed regardless
+    /// of `DTSTART`'s value type, unlike `EXDATE`, which has no `PERIOD`
+    /// alternative.
+    fn cmp_rdate(
+        &self,
+        rdate: &[RecurrenceDateTimes],
+    ) -> Result<(), ComponentError> {
+        let matches_type =
+            rdate
+                .iter()
+                .flat_map(RecurrenceDateTimes::value)
+                .all(|value| {
+                    matches!(
+                        (self.value(), value),
+                        (DateOrDatetime::Date(_), DateTimePeriod::Date(_))
+                            | (
+                                DateOrDatetime::DateTime(_),
+                                DateTimePeriod::DateTime(_)
+                            )
+                            | (_, DateTimePeriod::Period(_))
+                    )
+                });
+        if matches_type {
+            Ok(())
+        } else {
+            Err(ComponentError::MismatchedValueType("RDATE", "DTSTART"))
+        }
     }
-}
 
-/// RFC 5545 §3.8.5.1 requires `EXDATE`'s value type to match `DTSTART`'s;
-/// real-world producers extend that to expecting the same `TZID` too (see
-/// issue #6) — a `DTSTART;TZID=America/New_York` paired with an
-/// `EXDATE;TZID=Europe/London` value (or one specifying no `TZID` at all)
-/// names a different wall-clock instant than intended, even though both are
-/// DATE-TIME. Checked once per `EXDATE` property occurrence (the `TZID`
-/// parameter applies once to the whole comma-separated value list).
-fn check_exdate_tzid_matches_dtstart(
-    dtstart: Option<&DateTimeStart>,
-    exdate: &[ExceptionDateTimes],
-) -> Result<(), ComponentError> {
-    let Some(dtstart) = dtstart else {
-        return Ok(());
-    };
-    let matches_tzid =
-        exdate.iter().all(|e| e.tzid() == dtstart.tzid());
-    if matches_tzid {
-        Ok(())
-    } else {
-        Err(ComponentError::MismatchedTzid("EXDATE", "DTSTART"))
+    /// RFC 5545 §3.8.5.1 requires `EXDATE`'s value type to match
+    /// `DTSTART`'s; real-world producers extend that to expecting the same
+    /// `TZID` too (see issue #6) — a `DTSTART;TZID=America/New_York` paired
+    /// with an `EXDATE;TZID=Europe/London` value (or one specifying no
+    /// `TZID` at all) names a different wall-clock instant than intended,
+    /// even though both are DATE-TIME. Checked once per `EXDATE` property
+    /// occurrence (the `TZID` parameter applies once to the whole
+    /// comma-separated value list).
+    fn cmp_exdate_tzid(
+        &self,
+        exdate: &[ExceptionDateTimes],
+    ) -> Result<(), ComponentError> {
+        let matches_tzid = exdate.iter().all(|e| e.tzid() == self.tzid());
+        if matches_tzid {
+            Ok(())
+        } else {
+            Err(ComponentError::MismatchedTzid("EXDATE", "DTSTART"))
+        }
     }
-}
 
-/// RFC 5545 §3.8.5.2 requires `RDATE`'s value type to match `DTSTART`'s (or
-/// be `PERIOD`); real-world producers extend that to expecting the same
-/// `TZID` too when both are DATE-TIME (see [`check_exdate_tzid_matches_dtstart`]).
-fn check_rdate_tzid_matches_dtstart(
-    dtstart: Option<&DateTimeStart>,
-    rdate: &[RecurrenceDateTimes],
-) -> Result<(), ComponentError> {
-    let Some(dtstart) = dtstart else {
-        return Ok(());
-    };
-    let matches_tzid = rdate.iter().all(|r| r.tzid() == dtstart.tzid());
-    if matches_tzid {
-        Ok(())
-    } else {
-        Err(ComponentError::MismatchedTzid("RDATE", "DTSTART"))
+    /// RFC 5545 §3.8.5.2 requires `RDATE`'s value type to match `DTSTART`'s
+    /// (or be `PERIOD`); real-world producers extend that to expecting the
+    /// same `TZID` too when both are DATE-TIME (see [`Self::cmp_exdate_tzid`]).
+    fn cmp_rdate_tzid(
+        &self,
+        rdate: &[RecurrenceDateTimes],
+    ) -> Result<(), ComponentError> {
+        let matches_tzid = rdate.iter().all(|r| r.tzid() == self.tzid());
+        if matches_tzid {
+            Ok(())
+        } else {
+            Err(ComponentError::MismatchedTzid("RDATE", "DTSTART"))
+        }
     }
 }
 
@@ -1184,22 +1166,17 @@ impl EventBuilder {
         if self.dtend.is_some() && self.duration.is_some() {
             return Err(ComponentError::MutuallyExclusive("DTEND", "DURATION"));
         }
-        check_until_matches_dtstart(
-            self.dtstart.as_ref(),
-            self.rrule.as_ref(),
-        )?;
-        check_value_type_matches_dtstart(
-            self.dtstart.as_ref(),
-            self.dtend.as_ref().map(DateTimeEnd::value),
-            "DTEND",
-        )?;
-        check_exdate_matches_dtstart(self.dtstart.as_ref(), &self.exdate)?;
-        check_rdate_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
-        check_exdate_tzid_matches_dtstart(
-            self.dtstart.as_ref(),
-            &self.exdate,
-        )?;
-        check_rdate_tzid_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
+        if let Some(dtstart) = self.dtstart.as_ref() {
+            dtstart.cmp_until(self.rrule.as_ref())?;
+            dtstart.cmp_value_type(
+                self.dtend.as_ref().map(DateTimeEnd::value),
+                "DTEND",
+            )?;
+            dtstart.cmp_exdate(&self.exdate)?;
+            dtstart.cmp_rdate(&self.rdate)?;
+            dtstart.cmp_exdate_tzid(&self.exdate)?;
+            dtstart.cmp_rdate_tzid(&self.rdate)?;
+        }
         let alarms = self
             .alarms
             .into_iter()
@@ -1367,22 +1344,17 @@ impl TodoBuilder {
         if self.duration.is_some() && self.dtstart.is_none() {
             return Err(ComponentError::Requires("DURATION", "DTSTART"));
         }
-        check_until_matches_dtstart(
-            self.dtstart.as_ref(),
-            self.rrule.as_ref(),
-        )?;
-        check_value_type_matches_dtstart(
-            self.dtstart.as_ref(),
-            self.due.as_ref().map(DateTimeDue::value),
-            "DUE",
-        )?;
-        check_exdate_matches_dtstart(self.dtstart.as_ref(), &self.exdate)?;
-        check_rdate_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
-        check_exdate_tzid_matches_dtstart(
-            self.dtstart.as_ref(),
-            &self.exdate,
-        )?;
-        check_rdate_tzid_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
+        if let Some(dtstart) = self.dtstart.as_ref() {
+            dtstart.cmp_until(self.rrule.as_ref())?;
+            dtstart.cmp_value_type(
+                self.due.as_ref().map(DateTimeDue::value),
+                "DUE",
+            )?;
+            dtstart.cmp_exdate(&self.exdate)?;
+            dtstart.cmp_rdate(&self.rdate)?;
+            dtstart.cmp_exdate_tzid(&self.exdate)?;
+            dtstart.cmp_rdate_tzid(&self.rdate)?;
+        }
         let alarms = self
             .alarms
             .into_iter()
@@ -1663,11 +1635,12 @@ impl FreeBusyBuilder {
     /// Validates the cross-field rules RFC 5545 §3.6.4 places on
     /// `VFREEBUSY` and assembles the finished [`FreeBusy`].
     fn build(self) -> Result<FreeBusy, ComponentError> {
-        check_value_type_matches_dtstart(
-            self.dtstart.as_ref(),
-            self.dtend.as_ref().map(DateTimeEnd::value),
-            "DTEND",
-        )?;
+        if let Some(dtstart) = self.dtstart.as_ref() {
+            dtstart.cmp_value_type(
+                self.dtend.as_ref().map(DateTimeEnd::value),
+                "DTEND",
+            )?;
+        }
         Ok(FreeBusy {
             dtstamp: self.dtstamp,
             uid: self.uid,
@@ -1722,17 +1695,13 @@ impl JournalBuilder {
     /// Validates the cross-field rules RFC 5545 §3.6.3 places on
     /// `VJOURNAL` and assembles the finished [`Journal`].
     fn build(self) -> Result<Journal, ComponentError> {
-        check_until_matches_dtstart(
-            self.dtstart.as_ref(),
-            self.rrule.as_ref(),
-        )?;
-        check_exdate_matches_dtstart(self.dtstart.as_ref(), &self.exdate)?;
-        check_rdate_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
-        check_exdate_tzid_matches_dtstart(
-            self.dtstart.as_ref(),
-            &self.exdate,
-        )?;
-        check_rdate_tzid_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
+        if let Some(dtstart) = self.dtstart.as_ref() {
+            dtstart.cmp_until(self.rrule.as_ref())?;
+            dtstart.cmp_exdate(&self.exdate)?;
+            dtstart.cmp_rdate(&self.rdate)?;
+            dtstart.cmp_exdate_tzid(&self.exdate)?;
+            dtstart.cmp_rdate_tzid(&self.rdate)?;
+        }
         Ok(Journal {
             dtstamp: self
                 .dtstamp
@@ -1967,12 +1936,11 @@ impl TzPropBuilder {
     /// Validates the `tzprop` grammar's required fields (RFC 5545 §3.6.5)
     /// and assembles the finished [`TzProp`].
     fn build(self) -> Result<TzProp, ComponentError> {
-        check_until_matches_dtstart(
-            self.dtstart.as_ref(),
-            self.rrule.as_ref(),
-        )?;
-        check_rdate_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
-        check_rdate_tzid_matches_dtstart(self.dtstart.as_ref(), &self.rdate)?;
+        if let Some(dtstart) = self.dtstart.as_ref() {
+            dtstart.cmp_until(self.rrule.as_ref())?;
+            dtstart.cmp_rdate(&self.rdate)?;
+            dtstart.cmp_rdate_tzid(&self.rdate)?;
+        }
         Ok(TzProp {
             dtstart: self
                 .dtstart
