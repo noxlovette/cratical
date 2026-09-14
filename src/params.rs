@@ -14,6 +14,14 @@ fn quoted(v: &[u8]) -> Result<&[u8], ParamError> {
     strip_quoted_string(v).ok_or(ParamError::QuotedString)
 }
 
+/// For a parameter whose grammar is `param-value = paramtext /
+/// quoted-string` (quoting is optional — unlike e.g. `ALTREP`/`DIR`, whose
+/// RFC text explicitly requires a quoted-string): strips the DQUOTE
+/// delimiters if `v` is quoted, otherwise passes it through unchanged.
+fn maybe_quoted(v: &[u8]) -> &[u8] {
+    strip_quoted_string(v).unwrap_or(v)
+}
+
 /// Explicit value type for a property, as carried by the `VALUE` parameter.
 ///
 /// This parameter specifies the value type and format of the property value.
@@ -126,7 +134,7 @@ impl TryFrom<&[u8]> for Altrep {
 ///
 /// Example:
 ///
-/// > ORGANIZER;CN="John Smith":mailto:jsmith@example.com
+/// > ORGANIZER;CN=John Smith:mailto:jsmith@example.com
 ///
 /// [Section 3.2.2](https://datatracker.ietf.org/doc/html/rfc5545#section-3.2.2)
 #[derive(Debug)]
@@ -136,7 +144,7 @@ impl TryFrom<&[u8]> for CommonName {
     type Error = ParamError;
 
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Self(quoted(b)?.try_into()?))
+        Ok(Self(maybe_quoted(b).try_into()?))
     }
 }
 

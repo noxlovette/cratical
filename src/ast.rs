@@ -91,6 +91,87 @@ pub(crate) fn strip_quoted_string(v: &[u8]) -> Option<&[u8]> {
     v.strip_prefix(needle).and_then(|s| s.strip_suffix(needle))
 }
 
+/// Decodes the CARET-escape sequences [RFC 6868](https://datatracker.ietf.org/doc/html/rfc6868)
+/// defines for *parameter* values (distinct from the BACKSLASH-escaping
+/// [Section 3.3.11](https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.11)
+/// defines for `TEXT` property values, see [`crate::values::Text`]'s own
+/// unescaping): `^n` decodes to a literal newline, `^'` to a literal `"`,
+/// and `^^` to a literal `^`. A `^` followed by anything else is not a
+/// defined sequence, so per RFC 6868 Section 3.2 ("the character sequence
+/// should be left as it is") both bytes are left untouched. Operates on the
+/// already-`;`/`=`-split parameter value (i.e. after [`crate::properties::param_value`]
+/// has isolated it), not on the raw content line — a `^` has no special
+/// meaning outside a parameter value.
+pub(crate) fn decode_caret(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut iter = bytes.iter().copied().peekable();
+    while let Some(b) = iter.next() {
+        if b != b'^' {
+            out.push(b);
+            continue;
+        }
+        match iter.peek() {
+            Some(b'n') => {
+                out.push(b'\n');
+                iter.next();
+            }
+            Some(b'\'') => {
+                out.push(b'"');
+                iter.next();
+            }
+            Some(b'^') => {
+                out.push(b'^');
+                iter.next();
+            }
+            _ => out.push(b'^'),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod decode_caret_tests {
+    use super::*;
+
+    #[test]
+    fn decodes_newline_quote_and_caret() {
+        assert_eq!(decode_caret(b"^n"), b"\n");
+        assert_eq!(decode_caret(b"^'"), b"\"");
+        assert_eq!(decode_caret(b"^^"), b"^");
+    }
+
+    #[test]
+    fn decodes_the_fixture_example() {
+        // collective-icalendar/calendars/rfc_6868.ics: ALL=^^^'^n
+        assert_eq!(decode_caret(b"^^^'^n"), b"^\"\n");
+    }
+
+    #[test]
+    fn decodes_caret_quote_inside_running_text() {
+        // ATTENDEE;CN=George Herman ^'Babe^' Ruth
+        assert_eq!(
+            decode_caret(b"George Herman ^'Babe^' Ruth"),
+            b"George Herman \"Babe\" Ruth"
+        );
+    }
+
+    #[test]
+    fn undefined_sequence_is_left_untouched() {
+        // RFC 6868 3.2: "^" followed by anything else is left as-is.
+        assert_eq!(decode_caret(b"^a"), b"^a");
+    }
+
+    #[test]
+    fn trailing_lone_caret_is_left_untouched() {
+        assert_eq!(decode_caret(b"^"), b"^");
+    }
+
+    #[test]
+    fn text_without_carets_is_unchanged() {
+        assert_eq!(decode_caret(b"plain value"), b"plain value");
+    }
+}
+
 /// The calendar component carried by an [`crate::ICalendar`] object.
 ///
 /// Each variant corresponds to a component type defined in RFC 5545 Section

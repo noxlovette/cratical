@@ -52,22 +52,22 @@ impl TryFrom<&[u8]> for AttendeeParams {
         for segment in param_segments(v) {
             let value = || param_value(segment);
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
-                b"LANGUAGE" => params.language = Some(value()?.try_into()?),
+                b"LANGUAGE" => params.language = Some(value()?.as_slice().try_into()?),
                 b"CUTYPE" => {
-                    params.calendar_user_type = Some(value()?.try_into()?)
+                    params.calendar_user_type = Some(value()?.as_slice().try_into()?)
                 }
-                b"MEMBER" => params.member = Some(value()?.try_into()?),
-                b"PARTSTAT" => params.status = Some(value()?.try_into()?),
-                b"RSVP" => params.rsvp = Some(value()?.try_into()?),
+                b"MEMBER" => params.member = Some(value()?.as_slice().try_into()?),
+                b"PARTSTAT" => params.status = Some(value()?.as_slice().try_into()?),
+                b"RSVP" => params.rsvp = Some(value()?.as_slice().try_into()?),
                 b"DELEGATED-TO" => {
-                    params.deletegatee = Some(value()?.try_into()?)
+                    params.deletegatee = Some(value()?.as_slice().try_into()?)
                 }
                 b"DELEGATED-FROM" => {
-                    params.delegator = Some(value()?.try_into()?)
+                    params.delegator = Some(value()?.as_slice().try_into()?)
                 }
-                b"SENT-BY" => params.sent_by = Some(value()?.try_into()?),
-                b"CN" => params.common_name = Some(value()?.try_into()?),
-                b"DIR" => params.directory = Some(value()?.try_into()?),
+                b"SENT-BY" => params.sent_by = Some(value()?.as_slice().try_into()?),
+                b"CN" => params.common_name = Some(value()?.as_slice().try_into()?),
+                b"DIR" => params.directory = Some(value()?.as_slice().try_into()?),
                 _ => params.shared.absorb(segment)?,
             }
         }
@@ -124,10 +124,10 @@ impl TryFrom<&[u8]> for OrgParams {
         for segment in param_segments(v) {
             let value = || param_value(segment);
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
-                b"LANGUAGE" => params.language = Some(value()?.try_into()?),
-                b"CN" => params.common_name = Some(value()?.try_into()?),
-                b"DIR" => params.directory = Some(value()?.try_into()?),
-                b"SENT-BY" => params.sent_by = Some(value()?.try_into()?),
+                b"LANGUAGE" => params.language = Some(value()?.as_slice().try_into()?),
+                b"CN" => params.common_name = Some(value()?.as_slice().try_into()?),
+                b"DIR" => params.directory = Some(value()?.as_slice().try_into()?),
+                b"SENT-BY" => params.sent_by = Some(value()?.as_slice().try_into()?),
                 _ => params.shared.absorb(segment)?,
             }
         }
@@ -188,9 +188,9 @@ impl TryFrom<&[u8]> for RecurrenceParams {
         for segment in param_segments(v) {
             let value = || param_value(segment);
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
-                b"VALUE" => params.data_type = Some(value()?.try_into()?),
-                b"TZID" => params.tzid = Some(value()?.try_into()?),
-                b"RANGE" => params.recurrence = Some(value()?.try_into()?),
+                b"VALUE" => params.data_type = Some(value()?.as_slice().try_into()?),
+                b"TZID" => params.tzid = Some(value()?.as_slice().try_into()?),
+                b"RANGE" => params.recurrence = Some(value()?.as_slice().try_into()?),
                 _ => params.shared.absorb(segment)?,
             }
         }
@@ -233,7 +233,7 @@ impl TryFrom<&[u8]> for RelatedToParams {
         for segment in param_segments(v) {
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
                 b"RELTYPE" => {
-                    params.rt = Some(param_value(segment)?.try_into()?)
+                    params.rt = Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 _ => params.shared.absorb(segment)?,
             }
@@ -284,5 +284,36 @@ impl Uid {
     /// components sharing the same `UID` and `RECURRENCE-ID`.
     pub(crate) fn as_str(&self) -> &str {
         &self.value
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn attendee_cn_decodes_rfc_6868_caret_sequences() {
+        // collective-icalendar/calendars/rfc_6868.ics
+        let attendee = Attendee::try_from(
+            b";CN=George Herman ^'Babe^' Ruth:mailto:babe@example.com"
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{:?}", attendee.params.common_name.unwrap()),
+            r#"CommonName(Text("George Herman \"Babe\" Ruth"))"#
+        );
+    }
+
+    #[test]
+    fn attendee_cn_still_accepts_quoted_form() {
+        let attendee = Attendee::try_from(
+            br#";CN="Jane Doe":mailto:jdoe@example.com"#.as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{:?}", attendee.params.common_name.unwrap()),
+            r#"CommonName(Text("Jane Doe"))"#
+        );
     }
 }

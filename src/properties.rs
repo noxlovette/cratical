@@ -145,10 +145,11 @@ pub(crate) fn param_name(segment: &[u8]) -> Result<&[u8], ParameterError> {
         .ok_or_else(|| missing_equals(segment))
 }
 
-/// The `VALUE` half of a `NAME=VALUE` parameter segment.
-pub(crate) fn param_value(segment: &[u8]) -> Result<&[u8], ParameterError> {
+/// The `VALUE` half of a `NAME=VALUE` parameter segment, with RFC 6868
+/// caret-encoding ([`crate::ast::decode_caret`]) decoded.
+pub(crate) fn param_value(segment: &[u8]) -> Result<Vec<u8>, ParameterError> {
     split_once(segment, b'=')
-        .map(|(_, v)| v)
+        .map(|(_, v)| crate::ast::decode_caret(v))
         .ok_or_else(|| missing_equals(segment))
 }
 
@@ -177,7 +178,7 @@ impl SharedParams {
     /// composite params struct's fallback arm for params it doesn't model.
     fn absorb(&mut self, segment: &[u8]) -> Result<(), ParameterError> {
         let name = param_name(segment)?;
-        let text: Text = segment.try_into()?;
+        let text: Text = crate::ast::decode_caret(segment).as_slice().try_into()?;
         if name.to_ascii_uppercase().starts_with(b"X-") {
             self.xname.push(text);
         } else {
@@ -229,10 +230,12 @@ impl TryFrom<&[u8]> for AltrepLanguageParams {
         for segment in param_segments(v) {
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
                 b"ALTREP" => {
-                    params.altrep = Some(param_value(segment)?.try_into()?)
+                    params.altrep =
+                        Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 b"LANGUAGE" => {
-                    params.language = Some(param_value(segment)?.try_into()?)
+                    params.language =
+                        Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 _ => params.shared.absorb(segment)?,
             }
@@ -336,5 +339,42 @@ mod tests {
         assert!(params.altrep.is_some());
         assert!(params.language.is_some());
         assert_eq!(params.shared.xname.len(), 1);
+    }
+
+    #[test]
+    fn param_value_decodes_rfc_6868_caret_sequences() {
+        // ATTENDEE;CN=George Herman ^'Babe^' Ruth
+        assert_eq!(
+            param_value(b"CN=George Herman ^'Babe^' Ruth").unwrap(),
+            b"George Herman \"Babe\" Ruth"
+        );
+        // X-PARAM;ALL=^^^'^n
+        assert_eq!(param_value(b"ALL=^^^'^n").unwrap(), b"^\"\n");
+    }
+
+    #[test]
+    fn xprop_decodes_rfc_6868_caret_sequences_in_its_params() {
+        // collective-icalendar/calendars/rfc_6868.ics
+        let xprop = Xprop::try_from(
+            b";NEWLINE=^n;ALL=^^^'^n;UNKNOWN=^a^ ^asd:asd".as_slice(),
+        )
+        .unwrap();
+        assert_eq!(xprop.params.iana[0].as_str(), "NEWLINE=\n");
+        assert_eq!(xprop.params.iana[1].as_str(), "ALL=^\"\n");
+        // ^a and a lone trailing ^ aren't defined sequences, so both are
+        // left untouched per RFC 6868 §3.2.
+        assert_eq!(xprop.params.iana[2].as_str(), "UNKNOWN=^a^ ^asd");
+    }
+
+    #[test]
+    fn shared_params_absorb_decodes_caret_sequences_in_unknown_params() {
+        // X-PARAM;NEWLINE=^n;ALL=^^^'^n — NEWLINE/ALL aren't modeled by any
+        // property's own params struct, so they fall to SharedParams's
+        // iana/xname passthrough bucket, which must still decode them.
+        let params =
+            SharedParams::try_from(b";NEWLINE=^n;ALL=^^^'^n".as_slice())
+                .unwrap();
+        assert_eq!(params.iana[0].as_str(), "NEWLINE=\n");
+        assert_eq!(params.iana[1].as_str(), "ALL=^\"\n");
     }
 }

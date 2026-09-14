@@ -122,10 +122,10 @@ impl TryFrom<&[u8]> for ExDateParams {
         for segment in param_segments(v) {
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
                 b"VALUE" => {
-                    params.data_type = Some(param_value(segment)?.try_into()?)
+                    params.data_type = Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 b"TZID" => {
-                    params.tzid = Some(param_value(segment)?.try_into()?)
+                    params.tzid = Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 _ => params.shared.absorb(segment)?,
             }
@@ -192,10 +192,10 @@ impl TryFrom<&[u8]> for RDateParams {
         for segment in param_segments(v) {
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
                 b"VALUE" => {
-                    params.data_type = Some(param_value(segment)?.try_into()?)
+                    params.data_type = Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 b"TZID" => {
-                    params.tzid = Some(param_value(segment)?.try_into()?)
+                    params.tzid = Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 _ => params.shared.absorb(segment)?,
             }

@@ -115,15 +115,15 @@ impl TryFrom<&[u8]> for TriggerParams {
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
                 b"VALUE" => {
                     params.value_data_type =
-                        Some(param_value(segment)?.try_into()?)
+                        Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 b"TZID" => {
                     params.tz_identifier =
-                        Some(param_value(segment)?.try_into()?)
+                        Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 b"RELATED" => {
                     params.trigger_relationship =
-                        Some(param_value(segment)?.try_into()?)
+                        Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 _ => params.shared.absorb(segment)?,
             }
