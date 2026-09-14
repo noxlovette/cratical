@@ -5,7 +5,7 @@ use crate::{
     },
     components::{
         event::Event, free_busy::FreeBusy, journal::Journal,
-        timezone::Timezone, todo::Todo,
+        timezone::Timezone, todo::Todo, unknown::UnknownComponent,
     },
     properties::{
         CalendarScale, Iana, Method, ProductIdentifier, Version, Xprop,
@@ -71,6 +71,9 @@ pub enum Component {
     FreeBusy(FreeBusy),
     /// Time zone definition (`VTIMEZONE`).
     Timezone(Timezone),
+    /// An unrecognized `iana-comp`/`x-comp` (RFC 5545 §3.6), preserved
+    /// verbatim rather than dropped. See [`UnknownComponent`].
+    Unknown(UnknownComponent),
 }
 
 impl Calendar {

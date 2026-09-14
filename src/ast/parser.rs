@@ -5,7 +5,7 @@ use crate::{
         AlarmBuilder, CalendarBuilder, Component, ComponentError, EventBuilder,
         FreeBusyBuilder, JournalBuilder, Property, PropertyIngest,
         TimezoneBuilder, TodoBuilder, TzObservanceKind, TzPropBuilder,
-        token::TokenType,
+        UnknownComponentBuilder, token::TokenType,
     },
     params::ParamError,
     properties::{ParameterError, PropertyError},
@@ -105,7 +105,16 @@ impl Parser {
             b"VJOURNAL" => JournalBuilder::new().into(),
             b"VFREEBUSY" => FreeBusyBuilder::new().into(),
             b"VTIMEZONE" => TimezoneBuilder::new().into(),
-            _ => return Err(ParseError::UnknownComponent),
+            // An unrecognized `iana-comp`/`x-comp` (RFC 5545 §3.6). Not an
+            // error — the RFC requires applications to ignore a component
+            // type they don't recognize, and discourages silently dropping
+            // it. There's no typed builder for it, so its body is parsed
+            // opaquely by `unknown_component_body` instead of the loop
+            // below, and returned immediately.
+            _ => {
+                self.consume(Crlf, "expected crlf after BEGIN")?;
+                return Ok(self.unknown_component_body(name)?.into());
+            }
         };
         self.consume(Crlf, "expected crlf after BEGIN")?;
 
@@ -212,6 +221,48 @@ impl Parser {
         self.consume(Crlf, "expected crlf after END")?;
 
         Ok((kind, tz_prop))
+    }
+
+    /// parses the body of an unrecognized top-level component (RFC 5545
+    /// §3.6 `iana-comp`/`x-comp`) once its `BEGIN:<name>` line has already
+    /// been consumed by [`Self::component`]. Unlike [`Self::alarm`]/
+    /// [`Self::tz_observance`], there's no typed builder to route content
+    /// into — an unrecognized component's own alphabet of legal properties
+    /// isn't something this crate can know — so every content line is kept
+    /// verbatim, and any nested `BEGIN` (known or unknown) is captured the
+    /// same opaque way, recursively.
+    fn unknown_component_body(
+        &mut self,
+        name: Vec<u8>,
+    ) -> ParseResult<UnknownComponentBuilder> {
+        let mut builder = UnknownComponentBuilder::new(name.clone());
+
+        while !self.check(End)? {
+            if self.check(Begin)? {
+                let nested = self
+                    .consume(Begin, "expected component to start with BEGIN")?;
+                let nested_name = nested.literal().to_vec();
+                self.consume(Crlf, "expected crlf after BEGIN")?;
+                builder
+                    .components
+                    .push(self.unknown_component_body(nested_name)?);
+            } else {
+                let prop =
+                    self.consume(Property, "expected a property line")?;
+                let mut line = prop.lexeme().to_vec();
+                line.extend_from_slice(prop.literal());
+                builder.lines.push(line);
+                self.consume(Crlf, "expected crlf after property")?;
+            }
+        }
+
+        let end = self.consume(End, "expected component to end with END")?;
+        if end.literal() != name.as_slice() {
+            return Err(ParseError::MismatchedEnd);
+        }
+        self.consume(Crlf, "expected crlf after END")?;
+
+        Ok(builder)
     }
 
     /// checks if the next token corresponds to one of passed token types
@@ -372,6 +423,53 @@ mod tests {
     #[test]
     fn rejects_mismatched_begin_end() {
         let src = b"BEGIN:VCALENDAR\r\nPRODID:-//example//EN\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:123@example.com\r\nDTSTAMP:19970901T130000Z\r\nDTSTART:19970903T163000Z\r\nEND:VEVENT\r\nEND:VJOURNAL\r\n";
+        assert!(matches!(parse(src), Err(ParseError::MismatchedEnd)));
+    }
+
+    #[test]
+    fn captures_an_unrecognized_top_level_component_instead_of_erroring() {
+        // RFC 5545 §3.6: applications MUST ignore an iana-comp/x-comp they
+        // don't recognize, and SHOULD NOT silently drop it — it must not
+        // poison parsing of the rest of the VCALENDAR (issue #13).
+        let src = b"BEGIN:VCALENDAR\r\nPRODID:-//example//EN\r\nVERSION:2.0\r\nBEGIN:X-FOO\r\nUID:1234\r\nEND:X-FOO\r\nBEGIN:VEVENT\r\nUID:123@example.com\r\nDTSTAMP:19970901T130000Z\r\nDTSTART:19970903T163000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let cal = parse(src).unwrap();
+        assert_eq!(cal.components.len(), 2);
+
+        let crate::calendar::Component::Unknown(unknown) = &cal.components[0]
+        else {
+            panic!("expected the first component to be Unknown");
+        };
+        assert_eq!(unknown.name(), "X-FOO");
+        assert_eq!(unknown.lines(), ["UID:1234"]);
+        assert!(unknown.components().is_empty());
+
+        assert!(matches!(
+            cal.components[1],
+            crate::calendar::Component::Event(_)
+        ));
+    }
+
+    #[test]
+    fn unrecognized_top_level_component_preserves_components_nested_inside_it()
+    {
+        let src = b"BEGIN:VCALENDAR\r\nPRODID:-//example//EN\r\nVERSION:2.0\r\nBEGIN:X-OUTER\r\nBEGIN:X-INNER\r\nX-PROP:value\r\nEND:X-INNER\r\nEND:X-OUTER\r\nEND:VCALENDAR\r\n";
+        let cal = parse(src).unwrap();
+        assert_eq!(cal.components.len(), 1);
+
+        let crate::calendar::Component::Unknown(outer) = &cal.components[0]
+        else {
+            panic!("expected the component to be Unknown");
+        };
+        assert_eq!(outer.name(), "X-OUTER");
+        assert!(outer.lines().is_empty());
+        assert_eq!(outer.components().len(), 1);
+        assert_eq!(outer.components()[0].name(), "X-INNER");
+        assert_eq!(outer.components()[0].lines(), ["X-PROP:value"]);
+    }
+
+    #[test]
+    fn rejects_mismatched_begin_end_inside_an_unrecognized_component() {
+        let src = b"BEGIN:VCALENDAR\r\nPRODID:-//example//EN\r\nVERSION:2.0\r\nBEGIN:X-FOO\r\nEND:X-BAR\r\nEND:VCALENDAR\r\n";
         assert!(matches!(parse(src), Err(ParseError::MismatchedEnd)));
     }
 

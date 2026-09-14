@@ -14,6 +14,7 @@ use crate::{
         journal::Journal,
         timezone::{Timezone, TzProp},
         todo::Todo,
+        unknown::UnknownComponent,
     },
     properties::*,
     values::{DateOrDatetime, DateTimePeriod},
@@ -188,6 +189,56 @@ enum Component {
     FreeBusy(FreeBusyBuilder),
     /// Time zone definition (`VTIMEZONE`).
     Timezone(TimezoneBuilder),
+    /// An unrecognized `iana-comp`/`x-comp` (RFC 5545 §3.6). See
+    /// [`UnknownComponentBuilder`].
+    Unknown(UnknownComponentBuilder),
+}
+
+/// Builder for [`UnknownComponent`] — an unrecognized top-level
+/// `iana-comp`/`x-comp` (RFC 5545 §3.6). Unlike every other builder in
+/// this module, it has no typed alphabet of legal properties to ingest
+/// into: [`crate::ast::parser::Parser::component`] short-circuits before
+/// the shared property-ingest loop for this case (see that function),
+/// filling this builder in one shot instead via its own dedicated parse
+/// routine. `build` is therefore infallible — there's nothing left to
+/// validate.
+#[derive(Debug)]
+struct UnknownComponentBuilder {
+    name: Vec<u8>,
+    lines: Vec<Vec<u8>>,
+    components: Vec<UnknownComponentBuilder>,
+}
+
+impl UnknownComponentBuilder {
+    fn new(name: Vec<u8>) -> Self {
+        Self {
+            name,
+            lines: Vec::new(),
+            components: Vec::new(),
+        }
+    }
+
+    fn build(self) -> UnknownComponent {
+        UnknownComponent {
+            name: String::from_utf8_lossy(&self.name).into_owned(),
+            lines: self
+                .lines
+                .into_iter()
+                .map(|l| String::from_utf8_lossy(&l).into_owned())
+                .collect(),
+            components: self
+                .components
+                .into_iter()
+                .map(UnknownComponentBuilder::build)
+                .collect(),
+        }
+    }
+}
+
+impl From<UnknownComponentBuilder> for Component {
+    fn from(value: UnknownComponentBuilder) -> Self {
+        Self::Unknown(value)
+    }
 }
 
 impl From<EventBuilder> for Component {
@@ -221,7 +272,9 @@ impl From<TimezoneBuilder> for Component {
 
 impl Component {
     /// Routes one already-parsed [`Property`] into the matching builder's
-    /// own fields
+    /// own fields. Never actually called on `Self::Unknown` — see
+    /// [`UnknownComponentBuilder`]'s docs — but a `ParseResult` still
+    /// needs producing to keep this exhaustive.
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match self {
             Self::Event(b) => b.ingest(p),
@@ -229,6 +282,7 @@ impl Component {
             Self::Journal(b) => b.ingest(p),
             Self::FreeBusy(b) => b.ingest(p),
             Self::Timezone(b) => b.ingest(p),
+            Self::Unknown(_) => Err(ParseError::UnknownComponent),
         }
     }
 
@@ -274,6 +328,7 @@ impl Component {
             Self::Journal(b) => CalComponent::Journal(b.build()?),
             Self::FreeBusy(b) => CalComponent::FreeBusy(b.build()?),
             Self::Timezone(b) => CalComponent::Timezone(b.build()?),
+            Self::Unknown(b) => CalComponent::Unknown(b.build()),
         })
     }
 }
@@ -956,7 +1011,9 @@ fn validate_no_duplicate_uid(
             CalComponent::Journal(j) => {
                 (j.uid.as_str(), j.recurid.as_ref().map(RecurrenceId::value))
             }
-            CalComponent::FreeBusy(_) | CalComponent::Timezone(_) => continue,
+            CalComponent::FreeBusy(_)
+            | CalComponent::Timezone(_)
+            | CalComponent::Unknown(_) => continue,
         };
         if seen.contains(&(uid, recurid)) {
             return Err(ComponentError::DuplicateUid(uid.into()));
