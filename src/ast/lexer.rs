@@ -50,7 +50,11 @@ impl Lexer {
                         return Err(LexerError::Crlf { line: self.line });
                     }
                 }
-                b'\n' | b' ' | b'\t' => {}
+                b'\n' => {
+                    self.add_token(TokenType::Crlf, None);
+                    self.line += 1;
+                }
+                b' ' | b'\t' => {}
                 c if c.is_ascii_alphanumeric() => self.line_content()?,
                 _ => {
                     return Err(LexerError::UnknownLexeme {
@@ -124,7 +128,8 @@ impl Lexer {
     fn property(&mut self, name: &[u8]) {
         let rest_start = self.current;
         let rest = &self.source[self.current..];
-        self.current += memchr::memchr(b'\r', rest).unwrap_or(rest.len());
+        self.current +=
+            memchr::memchr2(b'\r', b'\n', rest).unwrap_or(rest.len());
         let remainder = &self.source[rest_start..self.current];
 
         self.tokens.push(Token::new(

@@ -217,3 +217,78 @@ fn unknown_lexeme_at_start_of_line_errors() {
         Err(LexerError::UnknownLexeme { line: 0, got: b'!' })
     ));
 }
+
+#[test]
+fn bare_lf_is_accepted_as_a_line_terminator() {
+    // RFC 5545 §3.1 specifies CRLF, but real-world LF-only `.ics` files
+    // (produced without CRLF normalization) are common and every mainstream
+    // parser accepts them. A bare `\n` must terminate a content line — not
+    // be silently swallowed as whitespace, which used to concatenate it
+    // into the next line's content.
+    let tokens = lex(b"UID:foo\nDTSTAMP:20240102T090000Z\n").unwrap();
+    assert_tokens(
+        tokens,
+        vec![
+            Token::new(TokenType::Property, b"UID", Some(b":foo"), 0),
+            Token::new(TokenType::Crlf, b"\n", None, 0),
+            Token::new(
+                TokenType::Property,
+                b"DTSTAMP",
+                Some(b":20240102T090000Z"),
+                1,
+            ),
+            Token::new(TokenType::Crlf, b"\n", None, 1),
+            Token::new(TokenType::Eof, b"", None, 2),
+        ],
+    );
+}
+
+#[test]
+fn bare_lf_terminated_begin_end_still_carries_component_name() {
+    let tokens = lex(b"BEGIN:VEVENT\nEND:VEVENT\n").unwrap();
+    assert_tokens(
+        tokens,
+        vec![
+            Token::new(TokenType::Begin, b"BEGIN", Some(b"VEVENT"), 0),
+            Token::new(TokenType::Crlf, b"\n", None, 0),
+            Token::new(TokenType::End, b"END", Some(b"VEVENT"), 1),
+            Token::new(TokenType::Crlf, b"\n", None, 1),
+            Token::new(TokenType::Eof, b"", None, 2),
+        ],
+    );
+}
+
+#[test]
+fn lone_cr_not_followed_by_lf_still_errors_when_file_is_otherwise_lf_only() {
+    // Mixing in a bare `\r` (not part of a `\r\n` pair) must still be
+    // rejected even in an otherwise LF-terminated file — accepting bare
+    // `\n` doesn't mean accepting bare `\r` too.
+    let res = lex(b"UID:foo\rX\n");
+    assert!(matches!(res, Err(LexerError::Crlf { line: 0 })));
+}
+
+#[test]
+fn folded_content_line_with_bare_lf_is_unfolded_before_scanning() {
+    // Mirrors `folded_content_line_is_unfolded_before_scanning`, but for a
+    // file whose fold sequences use bare `\n` + WSP instead of `\r\n` + WSP
+    // (see `unfold::unfold`'s doc comment).
+    let tokens = lex(
+        b"DESCRIPTION:This is a lo\n ng description\n  that exists on a long line.\n",
+    )
+    .unwrap();
+    assert_tokens(
+        tokens,
+        vec![
+            Token::new(
+                TokenType::Property,
+                b"DESCRIPTION",
+                Some(
+                    b":This is a long description that exists on a long line.",
+                ),
+                0,
+            ),
+            Token::new(TokenType::Crlf, b"\n", None, 0),
+            Token::new(TokenType::Eof, b"", None, 1),
+        ],
+    );
+}

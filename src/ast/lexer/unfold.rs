@@ -17,6 +17,12 @@
 /// When parsing a content line, folded lines MUST first be unfolded
 /// according to the unfolding procedure described above.
 ///
+/// A bare `\n` is also accepted as the line break half of a fold, mirroring
+/// the lexer's own leniency toward bare-LF line endings (see
+/// [`super::Lexer`]'s handling of `\n` as a line terminator): real-world
+/// `.ics` files produced without CRLF normalization fold with `\n` + WSP
+/// just as often as `\r\n` + WSP.
+///
 /// # Example
 ///
 /// > DESCRIPTION:This is a lo
@@ -33,12 +39,16 @@ pub fn unfold(src: &[u8]) -> Vec<u8> {
     let mut i = 0;
 
     while i < src.len() {
-        let is_fold = src[i] == b'\r'
+        let crlf_fold = src[i] == b'\r'
             && src.get(i + 1) == Some(&b'\n')
             && matches!(src.get(i + 2), Some(b' ') | Some(b'\t'));
+        let lf_fold = src[i] == b'\n'
+            && matches!(src.get(i + 1), Some(b' ') | Some(b'\t'));
 
-        if is_fold {
+        if crlf_fold {
             i += 3;
+        } else if lf_fold {
+            i += 2;
         } else {
             out.push(src[i]);
             i += 1;
@@ -104,5 +114,24 @@ mod tests {
         let expected = b"SUMMARY:AB\r\n";
 
         assert_eq!(unfold(folded), expected.to_vec());
+    }
+
+    #[test]
+    fn bare_lf_fold_is_also_unfolded() {
+        // Real-world LF-only `.ics` files fold with `\n` + WSP, not just
+        // `\r\n` + WSP (issue #10).
+        let folded = b"SUMMARY:A\n B\n C\n";
+        let expected = b"SUMMARY:ABC\n";
+
+        assert_eq!(unfold(folded), expected.to_vec());
+    }
+
+    #[test]
+    fn bare_lf_not_followed_by_wsp_is_preserved() {
+        // A real LF line break (not a fold) must survive unfolding
+        // untouched, mirroring `bare_crlf_not_followed_by_wsp_is_preserved`.
+        let src = b"UID:foo\nDTSTAMP:20240102T090000Z\n";
+
+        assert_eq!(unfold(src), src.to_vec());
     }
 }
