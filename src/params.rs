@@ -844,12 +844,11 @@ impl TryFrom<&[u8]> for TimeZoneIdentifier {
 }
 
 impl TimeZoneIdentifier {
-    /// The canonical IANA name (e.g. `"America/New_York"`) — used by the
-    /// calendar-wide check that every `TZID` parameter matches a
-    /// `VTIMEZONE` component defined in the same `VCALENDAR` (RFC 5545
-    /// §3.6.5).
-    pub(crate) fn name(&self) -> &'static str {
-        self.0.name()
+    /// The parsed [`chrono_tz::Tz`] itself — used to resolve a zoned
+    /// `DATE-TIME` value against this `TZID`'s real offset rules (RFC 5545
+    /// §3.3.5), rather than the host machine's own time zone.
+    pub(crate) fn tz(&self) -> Tz {
+        self.0
     }
 }
 

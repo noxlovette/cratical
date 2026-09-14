@@ -20,7 +20,20 @@ pub struct ExceptionDateTimes {
     params: ExDateParams,
 }
 
-impl_try_from_bytes_list!(ExceptionDateTimes, DateOrDatetime, ExDateParams);
+impl TryFrom<&[u8]> for ExceptionDateTimes {
+    type Error = crate::ast::parser::ParseError;
+
+    fn try_from(v: &[u8]) -> Result<Self, Self::Error> {
+        let colon = crate::properties::value_start(v)?;
+        let params = ExDateParams::try_from(&v[..colon])?;
+        let value = crate::ast::split_unescaped(&v[colon + 1..], b',')
+            .into_iter()
+            .map(DateOrDatetime::try_from)
+            .map(|r| r.map(|v| v.resolve_tzid(params.tzid.as_ref())))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self { value, params })
+    }
+}
 
 impl ExceptionDateTimes {
     /// The parsed `EXDATE` values — used by `build()` to cross-check their
@@ -28,13 +41,6 @@ impl ExceptionDateTimes {
     /// (RFC 5545 §3.8.5.1).
     pub(crate) fn value(&self) -> &[DateOrDatetime] {
         &self.value
-    }
-
-    /// The `TZID` parameter, if present — used by the calendar-wide check
-    /// that every referenced `TZID` matches a `VTIMEZONE` defined in the
-    /// same `VCALENDAR` (RFC 5545 §3.6.5).
-    pub(crate) fn tzid(&self) -> Option<&TimeZoneIdentifier> {
-        self.params.tzid.as_ref()
     }
 }
 
@@ -52,7 +58,20 @@ pub struct RecurrenceDateTimes {
     params: RDateParams,
 }
 
-impl_try_from_bytes_list!(RecurrenceDateTimes, DateTimePeriod, RDateParams);
+impl TryFrom<&[u8]> for RecurrenceDateTimes {
+    type Error = crate::ast::parser::ParseError;
+
+    fn try_from(v: &[u8]) -> Result<Self, Self::Error> {
+        let colon = crate::properties::value_start(v)?;
+        let params = RDateParams::try_from(&v[..colon])?;
+        let value = crate::ast::split_unescaped(&v[colon + 1..], b',')
+            .into_iter()
+            .map(DateTimePeriod::try_from)
+            .map(|r| r.map(|v| v.resolve_tzid(params.tzid.as_ref())))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self { value, params })
+    }
+}
 
 impl RecurrenceDateTimes {
     /// The parsed `RDATE` values — used by `build()` to cross-check their
@@ -60,13 +79,6 @@ impl RecurrenceDateTimes {
     /// `DTSTART` (RFC 5545 §3.8.5.2).
     pub(crate) fn value(&self) -> &[DateTimePeriod] {
         &self.value
-    }
-
-    /// The `TZID` parameter, if present — used by the calendar-wide check
-    /// that every referenced `TZID` matches a `VTIMEZONE` defined in the
-    /// same `VCALENDAR` (RFC 5545 §3.6.5).
-    pub(crate) fn tzid(&self) -> Option<&TimeZoneIdentifier> {
-        self.params.tzid.as_ref()
     }
 }
 

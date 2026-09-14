@@ -15,7 +15,6 @@ use crate::{
         timezone::{Timezone, TzProp},
         todo::Todo,
     },
-    params::TimeZoneIdentifier as TzIdParam,
     properties::*,
     values::{DateOrDatetime, DateTimePeriod},
 };
@@ -823,13 +822,22 @@ impl CalendarBuilder {
     }
 }
 
-/// RFC 5545 §3.6.5: "An individual 'VTIMEZONE' calendar component MUST be
-/// specified for each unique 'TZID' parameter value specified in the
-/// iCalendar object", and multiple `VTIMEZONE`s "MUST represent a unique
-/// time zone definition" each. Both halves are calendar-wide — the first
-/// needs every component's date/time properties, the second needs every
-/// `VTIMEZONE` — so this runs once in `CalendarBuilder::build`, after every
-/// component has already been individually validated and built.
+/// RFC 5545 §3.6.5 also says multiple `VTIMEZONE`s "MUST represent a unique
+/// time zone definition" each — checked here since it's calendar-wide (needs
+/// every `VTIMEZONE` in the object), so this runs once in
+/// `CalendarBuilder::build`, after every component has already been
+/// individually validated and built.
+///
+/// This function does *not* enforce the RFC's related requirement that "An
+/// individual 'VTIMEZONE' calendar component MUST be specified for each
+/// unique 'TZID' parameter value" — every `TZID` parameter
+/// that exists as a [`TzIdParam`] has, by construction, already been
+/// resolved against `chrono_tz`'s own IANA database (`TzIdParam::try_from`
+/// fails otherwise), which is a real, accurate source of offset rules
+/// independent of any local `VTIMEZONE`. Requiring a matching `VTIMEZONE`
+/// on top of that would reject the majority of real-world calendars, which
+/// reference well-known zones like `America/New_York` without also
+/// embedding a `VTIMEZONE` for them.
 fn validate_timezones(
     components: &[CalComponent],
 ) -> Result<(), ComponentError> {
@@ -840,45 +848,6 @@ fn validate_timezones(
             if !declared.insert(name) {
                 return Err(ComponentError::DuplicateTimeZone(name.into()));
             }
-        }
-    }
-
-    let check = |tzid: Option<&TzIdParam>| -> Result<(), ComponentError> {
-        match tzid {
-            Some(tzid) if !declared.contains(tzid.name()) => {
-                Err(ComponentError::UndeclaredTimeZone(tzid.name().into()))
-            }
-            _ => Ok(()),
-        }
-    };
-
-    for c in components {
-        match c {
-            CalComponent::Event(e) => {
-                check(e.dtstart.as_ref().and_then(DateTimeStart::tzid))?;
-                check(e.dtend.as_ref().and_then(DateTimeEnd::tzid))?;
-                check(e.recurid.as_ref().and_then(RecurrenceId::tzid))?;
-                e.exdate.iter().try_for_each(|p| check(p.tzid()))?;
-                e.rdate.iter().try_for_each(|p| check(p.tzid()))?;
-            }
-            CalComponent::Todo(t) => {
-                check(t.dtstart.as_ref().and_then(DateTimeStart::tzid))?;
-                check(t.due.as_ref().and_then(DateTimeDue::tzid))?;
-                check(t.recur_id.as_ref().and_then(RecurrenceId::tzid))?;
-                t.exdate.iter().try_for_each(|p| check(p.tzid()))?;
-                t.rdate.iter().try_for_each(|p| check(p.tzid()))?;
-            }
-            CalComponent::Journal(j) => {
-                check(j.dtstart.as_ref().and_then(DateTimeStart::tzid))?;
-                check(j.recurid.as_ref().and_then(RecurrenceId::tzid))?;
-                j.exdate.iter().try_for_each(|p| check(p.tzid()))?;
-                j.rdate.iter().try_for_each(|p| check(p.tzid()))?;
-            }
-            CalComponent::FreeBusy(f) => {
-                check(f.dtstart.as_ref().and_then(DateTimeStart::tzid))?;
-                check(f.dtend.as_ref().and_then(DateTimeEnd::tzid))?;
-            }
-            CalComponent::Timezone(_) => {}
         }
     }
     Ok(())
@@ -952,14 +921,6 @@ pub enum ComponentError {
     /// `RRULE`'s `UNTIL` and the component's `DTSTART`) didn't.
     #[error("{0}'s value type MUST match {1}'s (both DATE, or both DATE-TIME)")]
     MismatchedValueType(&'static str, &'static str),
-
-    /// A `TZID` parameter was used somewhere in the `VCALENDAR` without a
-    /// matching `VTIMEZONE` component defining it (RFC 5545 §3.6.5).
-    #[error(
-        "TZID={0} is used but no VTIMEZONE component defines it in this \
-         VCALENDAR"
-    )]
-    UndeclaredTimeZone(String),
 
     /// The same `TZID` was defined by more than one `VTIMEZONE` component in
     /// one `VCALENDAR` (RFC 5545 §3.6.5: "an individual VTIMEZONE...MUST be
@@ -2330,7 +2291,13 @@ mod build_tests {
     }
 
     #[test]
-    fn calendar_rejects_a_tzid_reference_with_no_matching_vtimezone() {
+    fn calendar_accepts_a_tzid_reference_with_no_matching_vtimezone() {
+        // RFC 5545 §3.6.5 says a VTIMEZONE "MUST" back every referenced
+        // TZID, but a TZID that reached this point as a `TimeZoneIdentifier`
+        // has, by construction, already been resolved against chrono_tz's
+        // own IANA database — a real, independent source of offset rules.
+        // Requiring a redundant local VTIMEZONE on top of that would reject
+        // the majority of real-world calendars (issue #14).
         let mut event = minimal_event();
         event.dtstart = Some(
             DateTimeStart::try_from(
@@ -2339,11 +2306,7 @@ mod build_tests {
             .unwrap(),
         );
         let cal = minimal_calendar(vec![event.into()]);
-        assert!(matches!(
-            cal.build(),
-            Err(ComponentError::UndeclaredTimeZone(tz))
-                if tz == "America/New_York"
-        ));
+        assert!(cal.build().is_ok());
     }
 
     #[test]

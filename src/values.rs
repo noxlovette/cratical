@@ -5,9 +5,11 @@ use crate::{
 };
 use base64::Engine;
 use chrono::{
-    DateTime as ChronoDateTime, Duration as ChronoDuration, FixedOffset, Local,
-    NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc,
+    DateTime as ChronoDateTime, Duration as ChronoDuration, FixedOffset,
+    MappedLocalTime, NaiveDate, NaiveDateTime, NaiveTime, Offset, TimeZone,
+    Utc,
 };
+use chrono_tz::Tz;
 pub use recurrence::Recur;
 use std::{ops::Deref, str::from_utf8};
 use thiserror::Error;
@@ -36,6 +38,24 @@ impl TryFrom<&[u8]> for DateOrDatetime {
     }
 }
 
+impl DateOrDatetime {
+    /// Resolves a `DateTime` value against `tzid`'s real offset rules (RFC
+    /// 5545 §3.3.5) when a `TZID` parameter is present. A `Date` value, or
+    /// a `DateTime` with no `TZID`, is returned unchanged — `TZID` "MUST
+    /// NOT be applied" to `DATE` properties (RFC 5545 §3.2.19).
+    pub(crate) fn resolve_tzid(
+        self,
+        tzid: Option<&TimeZoneIdentifier>,
+    ) -> Self {
+        match (self, tzid) {
+            (Self::DateTime(dt), Some(tzid)) => {
+                Self::DateTime(dt.resolve_tz(tzid.tz()))
+            }
+            (value, _) => value,
+        }
+    }
+}
+
 /// Convenience union of [`Date`], [`DateTime`], and [`Period`] used by
 /// properties that accept any of those three value types (e.g., `FREEBUSY`).
 #[derive(Debug)]
@@ -60,6 +80,26 @@ impl TryFrom<&[u8]> for DateTimePeriod {
             Ok(Self::DateTime(v.try_into()?))
         } else {
             Ok(Self::Date(v.try_into()?))
+        }
+    }
+}
+
+impl DateTimePeriod {
+    /// Resolves any `DateTime` component (bare, or as a `Period`'s start/
+    /// end) against `tzid`'s real offset rules (RFC 5545 §3.3.5) when a
+    /// `TZID` parameter is present. A `Date` value is returned unchanged.
+    pub(crate) fn resolve_tzid(
+        self,
+        tzid: Option<&TimeZoneIdentifier>,
+    ) -> Self {
+        match (self, tzid) {
+            (Self::DateTime(dt), Some(tzid)) => {
+                Self::DateTime(dt.resolve_tz(tzid.tz()))
+            }
+            (Self::Period(period), Some(tzid)) => {
+                Self::Period(period.resolve_tzid(tzid))
+            }
+            (value, _) => value,
         }
     }
 }
@@ -301,14 +341,16 @@ impl TryFrom<&[u8]> for Duration {
 ///
 /// [Section 3.3.5](https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.5)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DateTime(ChronoDateTime<Utc>);
-
-impl Deref for DateTime {
-    type Target = ChronoDateTime<Utc>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+pub enum DateTime {
+    /// An absolute instant: either given directly in UTC (form #2, trailing
+    /// `Z`), or a local time already resolved against its `TZID`'s real
+    /// offset rules via [`resolve_tz`](DateTime::resolve_tz) (form #3).
+    Utc(ChronoDateTime<Utc>),
+    /// A "floating" local time (form #1): no `TZID`, no trailing `Z`. Kept
+    /// as wall-clock text rather than resolved through any implicit time
+    /// zone — in particular, never the host machine's, which is what
+    /// floating time is defined to be independent of.
+    Floating(NaiveDateTime),
 }
 
 impl TryFrom<&[u8]> for DateTime {
@@ -319,16 +361,57 @@ impl TryFrom<&[u8]> for DateTime {
         if let Some(stripped) = str.strip_suffix('Z') {
             let naive =
                 NaiveDateTime::parse_from_str(stripped, ICAL_DATETIME_FMT)?;
-            return Ok(Self(Utc.from_utc_datetime(&naive)));
+            return Ok(Self::Utc(Utc.from_utc_datetime(&naive)));
         }
 
         let naive = NaiveDateTime::parse_from_str(str, ICAL_DATETIME_FMT)?;
-        let local = naive
-            .and_local_timezone(Local)
-            .single()
-            .ok_or(ValueError::AmbiguousLocalTime)?;
+        Ok(Self::Floating(naive))
+    }
+}
 
-        Ok(Self(local.to_utc()))
+impl DateTime {
+    /// Resolves a floating local time against `tz`'s real offset rules
+    /// (RFC 5545 §3.3.5, form #3). A value already anchored to UTC is
+    /// returned unchanged — the `TZID` parameter "MUST NOT be applied" to
+    /// a `DATE-TIME` whose value is already UTC (RFC 5545 §3.2.19).
+    ///
+    /// Per the RFC: if the local time is ambiguous (a DST fall-back fold),
+    /// it "refers to the first occurrence" — the earlier of the two
+    /// instants. If the local time does not exist (a DST spring-forward
+    /// gap), it's "interpreted using the UTC offset before the gap".
+    pub(crate) fn resolve_tz(self, tz: Tz) -> Self {
+        let Self::Floating(naive) = self else {
+            return self;
+        };
+        let utc = match tz.from_local_datetime(&naive) {
+            MappedLocalTime::Single(dt) => dt.to_utc(),
+            MappedLocalTime::Ambiguous(earliest, _latest) => earliest.to_utc(),
+            MappedLocalTime::None => {
+                let offset = offset_before_gap(tz, naive);
+                offset
+                    .from_local_datetime(&naive)
+                    .single()
+                    .expect("a fixed offset always resolves a local time")
+                    .to_utc()
+            }
+        };
+        Self::Utc(utc)
+    }
+}
+
+/// The UTC offset in effect immediately before a DST "spring-forward" gap
+/// that swallowed `naive` in `tz` — i.e. the offset RFC 5545 §3.3.5 says to
+/// use for a local time that doesn't exist. Real-world DST gaps are at
+/// most a couple of hours and transitions are at minimum months apart, so
+/// probing a day earlier lands safely before the gap and before any other
+/// transition.
+fn offset_before_gap(tz: Tz, naive: NaiveDateTime) -> FixedOffset {
+    let probe = naive - ChronoDuration::days(1);
+    match tz.offset_from_local_datetime(&probe) {
+        MappedLocalTime::Single(offset) => offset.fix(),
+        // Pathological: fall back to a fixed zero offset rather than loop
+        // or panic on adversarial input (e.g. the fuzz corpus).
+        _ => FixedOffset::east_opt(0).expect("zero is a valid UTC offset"),
     }
 }
 
@@ -482,6 +565,24 @@ impl TryFrom<&[u8]> for Period {
                 start,
                 end: rest.try_into()?,
             })
+        }
+    }
+}
+
+impl Period {
+    /// Resolves this period's `start`/`end` (or `start`) against `tzid`'s
+    /// real offset rules (RFC 5545 §3.3.5).
+    pub(crate) fn resolve_tzid(self, tzid: &TimeZoneIdentifier) -> Self {
+        let tz = tzid.tz();
+        match self {
+            Self::StartEnd { start, end } => Self::StartEnd {
+                start: start.resolve_tz(tz),
+                end: end.resolve_tz(tz),
+            },
+            Self::Duration { start, duration } => Self::Duration {
+                start: start.resolve_tz(tz),
+                duration,
+            },
         }
     }
 }
@@ -1445,10 +1546,6 @@ pub enum ValueError {
     #[error(transparent)]
     ChronoParse(#[from] chrono::ParseError),
 
-    /// The local time supplied did not yield a single time instance.
-    #[error("The local time supplied did not yield a single time instance")]
-    AmbiguousLocalTime,
-
     /// Catch-all for a value (or value sub-part, e.g. a `RECUR` rule-part)
     /// that doesn't match its expected shape.
     #[error("Value parsing failed. Expected {expected}, got {received:?}")]
@@ -1485,6 +1582,96 @@ mod tests {
             DateOrDatetime::try_from(b"19970714T133000Z".as_slice()),
             Ok(DateOrDatetime::DateTime(_))
         ));
+    }
+
+    #[test]
+    fn date_time_with_trailing_z_is_utc() {
+        let dt = DateTime::try_from(b"19980119T070000Z".as_slice()).unwrap();
+        assert_eq!(
+            dt,
+            DateTime::Utc(Utc.with_ymd_and_hms(1998, 1, 19, 7, 0, 0).unwrap())
+        );
+    }
+
+    #[test]
+    fn date_time_with_no_z_and_no_tzid_stays_floating() {
+        // RFC 5545 §3.3.5 form #1: a local time with no TZID is "floating"
+        // and must not be resolved through any implicit time zone —
+        // in particular, never the host machine's (issue #11).
+        let dt = DateTime::try_from(b"19980118T230000".as_slice()).unwrap();
+        assert_eq!(
+            dt,
+            DateTime::Floating(
+                NaiveDate::from_ymd_opt(1998, 1, 18)
+                    .unwrap()
+                    .and_hms_opt(23, 0, 0)
+                    .unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn resolve_tz_uses_the_tzid_zone_not_the_host_zone() {
+        // The RFC 5545 §3.3.5 form #3 worked example: TZID=America/
+        // New_York:19970714T133000 is 1:30 PM in New York, i.e.
+        // 17:30 UTC (EDT, UTC-04:00) — regardless of the host's own zone.
+        let tz: Tz = "America/New_York".parse().unwrap();
+        let dt = DateTime::try_from(b"19970714T133000".as_slice())
+            .unwrap()
+            .resolve_tz(tz);
+        assert_eq!(
+            dt,
+            DateTime::Utc(
+                Utc.with_ymd_and_hms(1997, 7, 14, 17, 30, 0).unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn resolve_tz_is_a_no_op_on_an_already_utc_value() {
+        // RFC 5545 §3.2.19: TZID "MUST NOT be applied" to a DATE-TIME
+        // that's already UTC.
+        let tz: Tz = "America/New_York".parse().unwrap();
+        let dt = DateTime::try_from(b"19980119T070000Z".as_slice())
+            .unwrap()
+            .resolve_tz(tz);
+        assert_eq!(
+            dt,
+            DateTime::Utc(Utc.with_ymd_and_hms(1998, 1, 19, 7, 0, 0).unwrap())
+        );
+    }
+
+    #[test]
+    fn resolve_tz_ambiguous_local_time_uses_the_first_occurrence() {
+        // RFC 5545 §3.3.5's own worked example: on the fall-back DST
+        // transition, "TZID=America/New_York:20071104T013000 indicates
+        // November 4, 2007 at 1:30 A.M. EDT (UTC-04:00)" — the *first* of
+        // the two instants this local time could mean, not the host's.
+        let tz: Tz = "America/New_York".parse().unwrap();
+        let dt = DateTime::try_from(b"20071104T013000".as_slice())
+            .unwrap()
+            .resolve_tz(tz);
+        assert_eq!(
+            dt,
+            DateTime::Utc(Utc.with_ymd_and_hms(2007, 11, 4, 5, 30, 0).unwrap())
+        );
+    }
+
+    #[test]
+    fn resolve_tz_nonexistent_local_time_uses_the_offset_before_the_gap() {
+        // RFC 5545 §3.3.5's own worked example: on the spring-forward DST
+        // transition, "TZID=America/New_York:20070311T023000 indicates
+        // March 11, 2007 at 3:30 A.M. EDT (UTC-04:00), one hour after
+        // 1:30 A.M. EST (UTC-05:00)" — i.e. resolved using EST (the offset
+        // before the gap), not left as an error.
+        let tz: Tz = "America/New_York".parse().unwrap();
+        let dt = DateTime::try_from(b"20070311T023000".as_slice())
+            .unwrap()
+            .resolve_tz(tz);
+        assert_eq!(
+            dt,
+            DateTime::Utc(Utc.with_ymd_and_hms(2007, 3, 11, 7, 30, 0).unwrap())
+        );
     }
 
     #[test]

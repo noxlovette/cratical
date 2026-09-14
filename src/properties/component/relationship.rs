@@ -150,7 +150,17 @@ pub struct RecurrenceId {
     params: RecurrenceParams,
 }
 
-impl_try_from_bytes!(RecurrenceId, DateOrDatetime, RecurrenceParams);
+impl TryFrom<&[u8]> for RecurrenceId {
+    type Error = crate::ast::parser::ParseError;
+
+    fn try_from(v: &[u8]) -> Result<Self, Self::Error> {
+        let colon = crate::properties::value_start(v)?;
+        let params = RecurrenceParams::try_from(&v[..colon])?;
+        let value = DateOrDatetime::try_from(&v[colon + 1..])?
+            .resolve_tzid(params.tzid.as_ref());
+        Ok(Self { value, params })
+    }
+}
 
 impl RecurrenceId {
     /// The parsed `RECURRENCE-ID` value — used by the calendar-wide check
@@ -158,13 +168,6 @@ impl RecurrenceId {
     /// (RFC 5545 §3.8.4.4).
     pub(crate) fn value(&self) -> &DateOrDatetime {
         &self.value
-    }
-
-    /// The `TZID` parameter, if present — used by the calendar-wide check
-    /// that every referenced `TZID` matches a `VTIMEZONE` defined in the
-    /// same `VCALENDAR` (RFC 5545 §3.6.5).
-    pub(crate) fn tzid(&self) -> Option<&TimeZoneIdentifier> {
-        self.params.tzid.as_ref()
     }
 }
 

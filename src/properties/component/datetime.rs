@@ -69,7 +69,17 @@ pub struct DateTimeEnd {
     params: DateTimeParams,
 }
 
-impl_try_from_bytes!(DateTimeEnd, DateOrDatetime, DateTimeParams);
+impl TryFrom<&[u8]> for DateTimeEnd {
+    type Error = crate::ast::parser::ParseError;
+
+    fn try_from(v: &[u8]) -> Result<Self, Self::Error> {
+        let colon = crate::properties::value_start(v)?;
+        let params = DateTimeParams::try_from(&v[..colon])?;
+        let value = DateOrDatetime::try_from(&v[colon + 1..])?
+            .resolve_tzid(params.tz_identifier.as_ref());
+        Ok(Self { value, params })
+    }
+}
 
 impl DateTimeEnd {
     /// The parsed `DTEND` value — used by `build()` to cross-check its
@@ -77,13 +87,6 @@ impl DateTimeEnd {
     /// (RFC 5545 §3.8.2.2).
     pub(crate) fn value(&self) -> &DateOrDatetime {
         &self.value
-    }
-
-    /// The `TZID` parameter, if present — used by the calendar-wide check
-    /// that every referenced `TZID` matches a `VTIMEZONE` defined in the
-    /// same `VCALENDAR` (RFC 5545 §3.6.5).
-    pub(crate) fn tzid(&self) -> Option<&TimeZoneIdentifier> {
-        self.params.tz_identifier.as_ref()
     }
 }
 
@@ -101,7 +104,17 @@ pub struct DateTimeDue {
     params: DateTimeParams,
 }
 
-impl_try_from_bytes!(DateTimeDue, DateOrDatetime, DateTimeParams);
+impl TryFrom<&[u8]> for DateTimeDue {
+    type Error = crate::ast::parser::ParseError;
+
+    fn try_from(v: &[u8]) -> Result<Self, Self::Error> {
+        let colon = crate::properties::value_start(v)?;
+        let params = DateTimeParams::try_from(&v[..colon])?;
+        let value = DateOrDatetime::try_from(&v[colon + 1..])?
+            .resolve_tzid(params.tz_identifier.as_ref());
+        Ok(Self { value, params })
+    }
+}
 
 impl DateTimeDue {
     /// The parsed `DUE` value — used by `build()` to cross-check its value
@@ -109,13 +122,6 @@ impl DateTimeDue {
     /// §3.8.2.3).
     pub(crate) fn value(&self) -> &DateOrDatetime {
         &self.value
-    }
-
-    /// The `TZID` parameter, if present — used by the calendar-wide check
-    /// that every referenced `TZID` matches a `VTIMEZONE` defined in the
-    /// same `VCALENDAR` (RFC 5545 §3.6.5).
-    pub(crate) fn tzid(&self) -> Option<&TimeZoneIdentifier> {
-        self.params.tz_identifier.as_ref()
     }
 }
 
@@ -132,7 +138,17 @@ pub struct DateTimeStart {
     params: DateTimeParams,
 }
 
-impl_try_from_bytes!(DateTimeStart, DateOrDatetime, DateTimeParams);
+impl TryFrom<&[u8]> for DateTimeStart {
+    type Error = crate::ast::parser::ParseError;
+
+    fn try_from(v: &[u8]) -> Result<Self, Self::Error> {
+        let colon = crate::properties::value_start(v)?;
+        let params = DateTimeParams::try_from(&v[..colon])?;
+        let value = DateOrDatetime::try_from(&v[colon + 1..])?
+            .resolve_tzid(params.tz_identifier.as_ref());
+        Ok(Self { value, params })
+    }
+}
 
 impl DateTimeStart {
     /// The parsed `DTSTART` value — used by component builders to
@@ -140,13 +156,6 @@ impl DateTimeStart {
     /// `RRULE`'s `UNTIL` (RFC 5545 §3.3.10).
     pub(crate) fn value(&self) -> &DateOrDatetime {
         &self.value
-    }
-
-    /// The `TZID` parameter, if present — used by the calendar-wide check
-    /// that every referenced `TZID` matches a `VTIMEZONE` defined in the
-    /// same `VCALENDAR` (RFC 5545 §3.6.5).
-    pub(crate) fn tzid(&self) -> Option<&TimeZoneIdentifier> {
-        self.params.tz_identifier.as_ref()
     }
 }
 
