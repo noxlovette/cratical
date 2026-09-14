@@ -180,9 +180,10 @@ impl TryFrom<&[u8]> for Duration {
         let str = str.strip_prefix('P').ok_or(ValueError::Duration)?;
 
         let total = if let Some(weeks) = str.strip_suffix('W') {
-            ChronoDuration::weeks(
+            ChronoDuration::try_weeks(
                 weeks.parse().map_err(|_| ValueError::Duration)?,
             )
+            .ok_or(ValueError::Duration)?
         } else {
             let (date_part, time_part) = match str.split_once('T') {
                 Some((d, t)) => (d, Some(t)),
@@ -192,9 +193,11 @@ impl TryFrom<&[u8]> for Duration {
             let mut total = ChronoDuration::seconds(0);
             let mut rest = date_part;
             if let Some(idx) = rest.find('D') {
-                total += ChronoDuration::days(
+                let days = ChronoDuration::try_days(
                     rest[..idx].parse().map_err(|_| ValueError::Duration)?,
-                );
+                )
+                .ok_or(ValueError::Duration)?;
+                total = total.checked_add(&days).ok_or(ValueError::Duration)?;
                 rest = &rest[idx + 1..];
             }
             if !rest.is_empty() {
@@ -203,27 +206,39 @@ impl TryFrom<&[u8]> for Duration {
 
             if let Some(mut rest) = time_part {
                 if let Some(idx) = rest.find('H') {
-                    total += ChronoDuration::hours(
+                    let hours = ChronoDuration::try_hours(
                         rest[..idx]
                             .parse()
                             .map_err(|_| ValueError::Duration)?,
-                    );
+                    )
+                    .ok_or(ValueError::Duration)?;
+                    total = total
+                        .checked_add(&hours)
+                        .ok_or(ValueError::Duration)?;
                     rest = &rest[idx + 1..];
                 }
                 if let Some(idx) = rest.find('M') {
-                    total += ChronoDuration::minutes(
+                    let minutes = ChronoDuration::try_minutes(
                         rest[..idx]
                             .parse()
                             .map_err(|_| ValueError::Duration)?,
-                    );
+                    )
+                    .ok_or(ValueError::Duration)?;
+                    total = total
+                        .checked_add(&minutes)
+                        .ok_or(ValueError::Duration)?;
                     rest = &rest[idx + 1..];
                 }
                 if let Some(idx) = rest.find('S') {
-                    total += ChronoDuration::seconds(
+                    let seconds = ChronoDuration::try_seconds(
                         rest[..idx]
                             .parse()
                             .map_err(|_| ValueError::Duration)?,
-                    );
+                    )
+                    .ok_or(ValueError::Duration)?;
+                    total = total
+                        .checked_add(&seconds)
+                        .ok_or(ValueError::Duration)?;
                     rest = &rest[idx + 1..];
                 }
                 if !rest.is_empty() {
@@ -1742,6 +1757,17 @@ mod tests {
     #[test]
     fn duration_rejects_missing_p() {
         assert!(Duration::try_from(b"15D".as_slice()).is_err());
+    }
+
+    #[test]
+    fn duration_rejects_overflowing_week_count_without_panicking() {
+        // `P999999999999999999W` overflows every representable
+        // `chrono::TimeDelta` (i64 milliseconds). Must be a `ValueError`,
+        // never a panic from the underlying `TimeDelta` arithmetic.
+        assert!(matches!(
+            Duration::try_from(b"P999999999999999999W".as_slice()),
+            Err(ValueError::Duration)
+        ));
     }
 
     #[test]

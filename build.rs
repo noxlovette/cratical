@@ -11,11 +11,38 @@
 //! - `libical-fuzz-corpus/` (non-`.txt` files, mostly `.bin`): fuzzer-found
 //!   inputs. These are only asserted not to panic — a parse `Err` is a fine,
 //!   expected outcome for adversarial/malformed bytes.
+//!
+//! A handful of files under `collective-icalendar/calendars/` are themselves
+//! deliberately malformed (see issue #4) rather than real-world-valid — they
+//! are excluded from the blanket "must parse successfully" generation below
+//! (`MALFORMED_FIXTURES`) and instead get individual, specific assertions in
+//! `tests/malformed_input.rs`.
 
 use std::{
     env, fs,
     path::{Path, PathBuf},
 };
+
+/// Files under `collective-icalendar/` that are deliberately malformed
+/// (real-world-broken exports, RFC violations, fuzzer-found edge cases —
+/// see issue #4), not valid calendars that happen to fail. Excluded from the
+/// blanket "must parse successfully" generation; each gets a dedicated,
+/// specific test in `tests/malformed_input.rs` instead.
+const MALFORMED_FIXTURES: &[&str] = &[
+    "collective-icalendar/calendars/broken_ical.ics",
+    "collective-icalendar/calendars/broken_dtstart.ics",
+    "collective-icalendar/calendars/issue_1081_invalid_start_and_end.ics",
+    "collective-icalendar/calendars/invalid_duration.ics",
+    "collective-icalendar/calendars/issue_1081_invalid_rrule_freq.ics",
+    "collective-icalendar/calendars/bom_calendar.ics",
+    "collective-icalendar/calendars/big_bad_calendar.ics",
+    "collective-icalendar/calendars/small_bad_calendar.ics",
+    "collective-icalendar/calendars/parsing_error.ics",
+    "collective-icalendar/calendars/parsing_error_in_UTC_offset.ics",
+    "collective-icalendar/calendars/fuzz_testcase_0_char_in_component_name.ics",
+    "collective-icalendar/calendars/fuzz_testcase_invalid_month.ics",
+    "collective-icalendar/calendars/fuzz_testcase_vtimezone_lone_cr.ics",
+];
 
 fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -31,6 +58,15 @@ fn main() {
         collect_files(&root, "ics", &mut files);
         files.sort();
         for file in files {
+            let rel_to_fixtures = file
+                .strip_prefix(&fixtures_root)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .replace('\\', "/");
+            if MALFORMED_FIXTURES.contains(&rel_to_fixtures.as_str()) {
+                continue;
+            }
             emit_test(&mut out, &manifest_dir, dir, &root, &file, true);
         }
     }
