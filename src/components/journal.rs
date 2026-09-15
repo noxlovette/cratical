@@ -1,9 +1,12 @@
-use crate::properties::{
-    Attachment, Attendee, Categories, Classification, Comment, Contact,
-    DateTimeCreated, DateTimeStamp, DateTimeStart, Description,
-    ExceptionDateTimes, Iana, LastModified, Organizer, RRule,
-    RecurrenceDateTimes, RecurrenceId, RelatedTo, RequestStatus, Sequence,
-    Status, Summary, Uid, UniformResourceLocator, Xprop,
+use crate::{
+    components::write_lines,
+    properties::{
+        Attachment, Attendee, Categories, Classification, Comment, Contact,
+        DateTimeCreated, DateTimeStamp, DateTimeStart, Description,
+        ExceptionDateTimes, Iana, LastModified, Organizer, RRule,
+        RecurrenceDateTimes, RecurrenceId, RelatedTo, RequestStatus, Sequence,
+        Status, Summary, Uid, UniformResourceLocator, Xprop,
+    },
 };
 
 /// A "VJOURNAL" calendar component is a grouping of
@@ -208,5 +211,59 @@ impl Journal {
     /// The IANA-registered properties this crate doesn't otherwise model.
     pub fn iana(&self) -> &[Iana] {
         &self.iana
+    }
+}
+
+impl std::fmt::Display for Journal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BEGIN:VJOURNAL\r\n")?;
+        write!(f, "{}\r\n", self.dtstamp)?;
+        write!(f, "{}\r\n", self.uid)?;
+        if let Some(v) = &self.class {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.created {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.dtstart {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.last_mod {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.organizer {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.recurid {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.seq {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.status {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.summary {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.url {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.rrule {
+            write!(f, "{v}\r\n")?;
+        }
+        write_lines(f, &self.attach)?;
+        write_lines(f, &self.attendee)?;
+        write_lines(f, &self.categories)?;
+        write_lines(f, &self.comment)?;
+        write_lines(f, &self.contact)?;
+        write_lines(f, &self.description)?;
+        write_lines(f, &self.exdate)?;
+        write_lines(f, &self.related)?;
+        write_lines(f, &self.rdate)?;
+        write_lines(f, &self.rstatus)?;
+        write_lines(f, &self.xprop)?;
+        write_lines(f, &self.iana)?;
+        write!(f, "END:VJOURNAL\r\n")
     }
 }

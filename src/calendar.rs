@@ -5,7 +5,7 @@ use crate::{
     },
     components::{
         event::Event, free_busy::FreeBusy, journal::Journal,
-        timezone::Timezone, todo::Todo, unknown::UnknownComponent,
+        timezone::Timezone, todo::Todo, unknown::UnknownComponent, write_lines,
     },
     properties::{
         CalendarScale, Iana, Method, ProductIdentifier, Version, Xprop,
@@ -76,6 +76,39 @@ pub enum Component {
     Unknown(UnknownComponent),
 }
 
+impl std::fmt::Display for Component {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Event(c) => write!(f, "{c}"),
+            Self::Todo(c) => write!(f, "{c}"),
+            Self::Journal(c) => write!(f, "{c}"),
+            Self::FreeBusy(c) => write!(f, "{c}"),
+            Self::Timezone(c) => write!(f, "{c}"),
+            Self::Unknown(c) => write!(f, "{c}"),
+        }
+    }
+}
+
+impl std::fmt::Display for Calendar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BEGIN:VCALENDAR\r\n")?;
+        write!(f, "{}\r\n", self.prodid)?;
+        write!(f, "{}\r\n", self.version)?;
+        if let Some(v) = &self.calscale {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.method {
+            write!(f, "{v}\r\n")?;
+        }
+        write_lines(f, &self.xprop)?;
+        write_lines(f, &self.iana)?;
+        for c in &self.components {
+            write!(f, "{c}")?;
+        }
+        write!(f, "END:VCALENDAR\r\n")
+    }
+}
+
 impl Calendar {
     /// The calendar components (`VEVENT`, `VTODO`, `VJOURNAL`, `VFREEBUSY`,
     /// `VTIMEZONE`) carried by this `VCALENDAR` object.
@@ -110,4 +143,88 @@ pub enum CalendarParseError {
     /// The token stream didn't form a valid iCalendar object.
     #[error(transparent)]
     Parse(#[from] ParseError),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn calendar_display_round_trips_a_minimal_calendar() {
+        let src = b"BEGIN:VCALENDAR\r\nPRODID:-//example//EN\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:123@example.com\r\nDTSTAMP:19970901T130000Z\r\nDTSTART:19970903T163000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        let calendar = Calendar::parse(src).unwrap();
+        assert_eq!(
+            calendar.to_string(),
+            "BEGIN:VCALENDAR\r\n\
+             PRODID:-//example//EN\r\n\
+             VERSION:2.0\r\n\
+             BEGIN:VEVENT\r\n\
+             DTSTAMP:19970901T130000Z\r\n\
+             UID:123@example.com\r\n\
+             DTSTART:19970903T163000Z\r\n\
+             END:VEVENT\r\n\
+             END:VCALENDAR\r\n"
+        );
+    }
+
+    #[test]
+    fn calendar_display_output_of_a_todo_with_alarm_reparses_successfully() {
+        // tests/fixtures/rfc5545/todo_with_alarm.ics — a VTODO with a
+        // nested VALARM and a folded ATTACH line, to exercise nested
+        // sub-component Display and nothing getting dropped along the way.
+        let src = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/rfc5545/todo_with_alarm.ics"
+        ));
+        let original = Calendar::parse(src).unwrap();
+        let rendered = original.to_string();
+
+        let reparsed = Calendar::parse(rendered.as_bytes())
+            .unwrap_or_else(|e| panic!("rendered output failed to reparse: {e}\n---\n{rendered}"));
+
+        assert_eq!(reparsed.components().len(), 1);
+        let Component::Todo(todo) = &reparsed.components()[0] else {
+            panic!("expected a VTODO");
+        };
+        assert_eq!(todo.uid().as_str(), "uid4@example.com");
+        assert_eq!(todo.alarms().len(), 1);
+        // ACTION:AUDIO in the source fixture — confirms the nested VALARM's
+        // own property survived Display + reparse, not just the VALARM
+        // wrapper's presence.
+        assert!(matches!(
+            todo.alarms()[0].action().kind(),
+            crate::properties::ActionEnum::Audio
+        ));
+    }
+
+    #[test]
+    fn calendar_display_output_of_a_timezone_meeting_reparses_successfully() {
+        // tests/fixtures/rfc5545/group_meeting_with_timezone.ics — a
+        // VTIMEZONE with both STANDARD and DAYLIGHT sub-components plus a
+        // VEVENT whose DTSTART/DTEND carry a TZID param, to exercise the
+        // STANDARD/DAYLIGHT naming split in `fmt_tz_observance` and the
+        // TZID-resolved-to-UTC round-trip.
+        let src = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/rfc5545/group_meeting_with_timezone.ics"
+        ));
+        let original = Calendar::parse(src).unwrap();
+        let rendered = original.to_string();
+
+        let reparsed = Calendar::parse(rendered.as_bytes())
+            .unwrap_or_else(|e| panic!("rendered output failed to reparse: {e}\n---\n{rendered}"));
+
+        assert_eq!(reparsed.components().len(), 2);
+        let Component::Timezone(tz) = &reparsed.components()[0] else {
+            panic!("expected a VTIMEZONE");
+        };
+        assert_eq!(tz.standardc().len(), 1);
+        assert_eq!(tz.daylightc().len(), 1);
+
+        let Component::Event(event) = &reparsed.components()[1] else {
+            panic!("expected a VEVENT");
+        };
+        assert_eq!(event.uid().as_str(), "guid-1.example.com");
+        assert_eq!(event.attendee().len(), 1);
+    }
 }

@@ -23,3 +23,29 @@ pub mod timezone;
 pub mod todo;
 /// An unrecognized top-level calendar component (`iana-comp`/`x-comp`).
 pub mod unknown;
+
+/// Writes each item in `items`, each followed by CRLF — used by every
+/// component's `Display` to render a `Vec<Property>` field (RFC 5545 §3.1
+/// content lines are CRLF-terminated).
+pub(crate) fn write_lines<T: std::fmt::Display>(
+    f: &mut std::fmt::Formatter<'_>,
+    items: &[T],
+) -> std::fmt::Result {
+    for item in items {
+        write!(f, "{item}\r\n")?;
+    }
+    Ok(())
+}
+
+/// Writes each nested sub-component in `items` as-is — a sub-component's own
+/// `Display` already ends with its CRLF-terminated `END:...` line, so no
+/// extra separator is added here.
+pub(crate) fn write_components<T: std::fmt::Display>(
+    f: &mut std::fmt::Formatter<'_>,
+    items: &[T],
+) -> std::fmt::Result {
+    for item in items {
+        write!(f, "{item}")?;
+    }
+    Ok(())
+}

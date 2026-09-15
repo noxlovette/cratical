@@ -55,3 +55,14 @@ impl UnknownComponent {
         &self.components
     }
 }
+
+impl std::fmt::Display for UnknownComponent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BEGIN:{}\r\n", self.name)?;
+        for line in &self.lines {
+            write!(f, "{line}\r\n")?;
+        }
+        crate::components::write_components(f, &self.components)?;
+        write!(f, "END:{}\r\n", self.name)
+    }
+}

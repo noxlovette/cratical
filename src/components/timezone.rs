@@ -1,7 +1,10 @@
-use crate::properties::{
-    Comment, DateTimeStart, Iana, LastModified, RRule, RecurrenceDateTimes,
-    TimeZoneIdentifier, TimeZoneName, TimeZoneOffsetFrom, TimeZoneOffsetTo,
-    TimeZoneUrl, Xprop,
+use crate::{
+    components::write_lines,
+    properties::{
+        Comment, DateTimeStart, Iana, LastModified, RRule,
+        RecurrenceDateTimes, TimeZoneIdentifier, TimeZoneName,
+        TimeZoneOffsetFrom, TimeZoneOffsetTo, TimeZoneUrl, Xprop,
+    },
 };
 
 /// A time zone is unambiguously defined by the set of time
@@ -133,6 +136,52 @@ impl Timezone {
     pub fn iana(&self) -> &[Iana] {
         &self.iana
     }
+}
+
+impl std::fmt::Display for Timezone {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BEGIN:VTIMEZONE\r\n")?;
+        write!(f, "{}\r\n", self.tzid)?;
+        if let Some(v) = &self.last_mod {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.tz_url {
+            write!(f, "{v}\r\n")?;
+        }
+        for p in &self.standardc {
+            fmt_tz_observance(f, "STANDARD", p)?;
+        }
+        for p in &self.daylightc {
+            fmt_tz_observance(f, "DAYLIGHT", p)?;
+        }
+        write_lines(f, &self.xprop)?;
+        write_lines(f, &self.iana)?;
+        write!(f, "END:VTIMEZONE\r\n")
+    }
+}
+
+/// Renders one `STANDARD`/`DAYLIGHT` sub-component (RFC 5545 §3.6.5) — its
+/// `tzprop` grammar is shared by both, so which sub-component name applies
+/// comes from which of `Timezone`'s two lists a given `TzProp` is iterated
+/// out of, not from `TzProp` itself.
+fn fmt_tz_observance(
+    f: &mut std::fmt::Formatter<'_>,
+    name: &str,
+    p: &TzProp,
+) -> std::fmt::Result {
+    write!(f, "BEGIN:{name}\r\n")?;
+    write!(f, "{}\r\n", p.dtstart)?;
+    write!(f, "{}\r\n", p.tz_offset_to)?;
+    write!(f, "{}\r\n", p.tz_offset_from)?;
+    if let Some(v) = &p.rrule {
+        write!(f, "{v}\r\n")?;
+    }
+    write_lines(f, &p.comment)?;
+    write_lines(f, &p.rdate)?;
+    write_lines(f, &p.tzname)?;
+    write_lines(f, &p.xprop)?;
+    write_lines(f, &p.iana)?;
+    write!(f, "END:{name}\r\n")
 }
 
 /// The `tzprop` grammar shared by `STANDARD`/`DAYLIGHT` sub-components (RFC

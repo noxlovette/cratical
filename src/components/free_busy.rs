@@ -1,7 +1,10 @@
-use crate::properties::{
-    Attendee, Comment, Contact, DateTimeEnd, DateTimeStamp, DateTimeStart,
-    FreeBusyTime, Iana, Organizer, RequestStatus, Uid, UniformResourceLocator,
-    Xprop,
+use crate::{
+    components::write_lines,
+    properties::{
+        Attendee, Comment, Contact, DateTimeEnd, DateTimeStamp, DateTimeStart,
+        FreeBusyTime, Iana, Organizer, RequestStatus, Uid,
+        UniformResourceLocator, Xprop,
+    },
 };
 
 /// A "VFREEBUSY" calendar component is a grouping of
@@ -161,5 +164,39 @@ impl FreeBusy {
     /// The IANA-registered properties this crate doesn't otherwise model.
     pub fn iana(&self) -> &[Iana] {
         &self.iana
+    }
+}
+
+impl std::fmt::Display for FreeBusy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BEGIN:VFREEBUSY\r\n")?;
+        if let Some(v) = &self.dtstamp {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.uid {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.contact {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.dtstart {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.dtend {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.organizer {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.url {
+            write!(f, "{v}\r\n")?;
+        }
+        write_lines(f, &self.attendee)?;
+        write_lines(f, &self.comment)?;
+        write_lines(f, &self.freebusy)?;
+        write_lines(f, &self.rstatus)?;
+        write_lines(f, &self.xprop)?;
+        write_lines(f, &self.iana)?;
+        write!(f, "END:VFREEBUSY\r\n")
     }
 }

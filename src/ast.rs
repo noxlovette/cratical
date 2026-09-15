@@ -293,8 +293,14 @@ impl Component {
     /// plain match rather than a trait every builder has to implement.
     fn ingest_alarm(&mut self, alarm: AlarmBuilder) -> ParseResult<()> {
         match self {
-            Self::Event(b) => Ok(b.alarms.push(alarm)),
-            Self::Todo(b) => Ok(b.alarms.push(alarm)),
+            Self::Event(b) => {
+                b.alarms.push(alarm);
+                Ok(())
+            }
+            Self::Todo(b) => {
+                b.alarms.push(alarm);
+                Ok(())
+            }
             _ => Err(ParseError::UnexpectedComponent("VALARM")),
         }
     }
@@ -308,10 +314,13 @@ impl Component {
         tz_prop: TzPropBuilder,
     ) -> ParseResult<()> {
         match self {
-            Self::Timezone(b) => Ok(match kind {
-                TzObservanceKind::Standard => b.standardc.push(tz_prop),
-                TzObservanceKind::Daylight => b.daylightc.push(tz_prop),
-            }),
+            Self::Timezone(b) => {
+                match kind {
+                    TzObservanceKind::Standard => b.standardc.push(tz_prop),
+                    TzObservanceKind::Daylight => b.daylightc.push(tz_prop),
+                }
+                Ok(())
+            }
             _ => Err(ParseError::UnexpectedComponent("STANDARD/DAYLIGHT")),
         }
     }
@@ -354,6 +363,14 @@ fn set_once<T>(
         return Err(PropertyError::DuplicateProperty(name).into());
     }
     *slot = Some(value);
+    Ok(())
+}
+
+/// Appends `value` onto a repeatable property's list. RFC 5545 allows these
+/// properties to occur any number of times, so unlike [`set_once`] there's
+/// no duplicate check.
+fn push_ok<T>(list: &mut Vec<T>, value: T) -> ParseResult<()> {
+    list.push(value);
     Ok(())
 }
 
@@ -1273,18 +1290,18 @@ impl PropertyIngest for EventBuilder {
             Property::Duration(v) => {
                 set_once(&mut self.duration, v, "DURATION")
             }
-            Property::Attachment(v) => Ok(self.attach.push(v)),
-            Property::Attendee(v) => Ok(self.attendee.push(v)),
-            Property::Categories(v) => Ok(self.categories.push(v)),
-            Property::Comment(v) => Ok(self.comment.push(v)),
-            Property::Contact(v) => Ok(self.contact.push(v)),
-            Property::ExceptionDateTimes(v) => Ok(self.exdate.push(v)),
-            Property::RequestStatus(v) => Ok(self.rstatus.push(v)),
-            Property::RelatedTo(v) => Ok(self.related.push(v)),
-            Property::Resources(v) => Ok(self.resources.push(v)),
-            Property::RecurrenceDateTimes(v) => Ok(self.rdate.push(v)),
-            Property::Xprop(v) => Ok(self.xprop.push(v)),
-            Property::Iana(v) => Ok(self.iana.push(v)),
+            Property::Attachment(v) => push_ok(&mut self.attach, v),
+            Property::Attendee(v) => push_ok(&mut self.attendee, v),
+            Property::Categories(v) => push_ok(&mut self.categories, v),
+            Property::Comment(v) => push_ok(&mut self.comment, v),
+            Property::Contact(v) => push_ok(&mut self.contact, v),
+            Property::ExceptionDateTimes(v) => push_ok(&mut self.exdate, v),
+            Property::RequestStatus(v) => push_ok(&mut self.rstatus, v),
+            Property::RelatedTo(v) => push_ok(&mut self.related, v),
+            Property::Resources(v) => push_ok(&mut self.resources, v),
+            Property::RecurrenceDateTimes(v) => push_ok(&mut self.rdate, v),
+            Property::Xprop(v) => push_ok(&mut self.xprop, v),
+            Property::Iana(v) => push_ok(&mut self.iana, v),
             _ => Err(PropertyError::UnexpectedProperty.into()),
         }
     }
@@ -1455,18 +1472,18 @@ impl PropertyIngest for TodoBuilder {
             Property::Duration(v) => {
                 set_once(&mut self.duration, v, "DURATION")
             }
-            Property::Attachment(v) => Ok(self.attach.push(v)),
-            Property::Attendee(v) => Ok(self.attendee.push(v)),
-            Property::Categories(v) => Ok(self.categories.push(v)),
-            Property::Comment(v) => Ok(self.comment.push(v)),
-            Property::Contact(v) => Ok(self.contact.push(v)),
-            Property::ExceptionDateTimes(v) => Ok(self.exdate.push(v)),
-            Property::RequestStatus(v) => Ok(self.rstatus.push(v)),
-            Property::RelatedTo(v) => Ok(self.related.push(v)),
-            Property::Resources(v) => Ok(self.resources.push(v)),
-            Property::RecurrenceDateTimes(v) => Ok(self.rdate.push(v)),
-            Property::Xprop(v) => Ok(self.xprop.push(v)),
-            Property::Iana(v) => Ok(self.iana.push(v)),
+            Property::Attachment(v) => push_ok(&mut self.attach, v),
+            Property::Attendee(v) => push_ok(&mut self.attendee, v),
+            Property::Categories(v) => push_ok(&mut self.categories, v),
+            Property::Comment(v) => push_ok(&mut self.comment, v),
+            Property::Contact(v) => push_ok(&mut self.contact, v),
+            Property::ExceptionDateTimes(v) => push_ok(&mut self.exdate, v),
+            Property::RequestStatus(v) => push_ok(&mut self.rstatus, v),
+            Property::RelatedTo(v) => push_ok(&mut self.related, v),
+            Property::Resources(v) => push_ok(&mut self.resources, v),
+            Property::RecurrenceDateTimes(v) => push_ok(&mut self.rdate, v),
+            Property::Xprop(v) => push_ok(&mut self.xprop, v),
+            Property::Iana(v) => push_ok(&mut self.iana, v),
             _ => Err(PropertyError::UnexpectedProperty.into()),
         }
     }
@@ -1616,10 +1633,10 @@ impl PropertyIngest for AlarmBuilder {
                 set_once(&mut self.description, v, "DESCRIPTION")
             }
             Property::Summary(v) => set_once(&mut self.summary, v, "SUMMARY"),
-            Property::Attendee(v) => Ok(self.attendee.push(v)),
-            Property::Attachment(v) => Ok(self.attach.push(v)),
-            Property::Xprop(v) => Ok(self.xprop.push(v)),
-            Property::Iana(v) => Ok(self.iana.push(v)),
+            Property::Attendee(v) => push_ok(&mut self.attendee, v),
+            Property::Attachment(v) => push_ok(&mut self.attach, v),
+            Property::Xprop(v) => push_ok(&mut self.xprop, v),
+            Property::Iana(v) => push_ok(&mut self.iana, v),
             _ => Err(PropertyError::UnexpectedProperty.into()),
         }
     }
@@ -1675,12 +1692,12 @@ impl PropertyIngest for FreeBusyBuilder {
             Property::UniformResourceLocator(v) => {
                 set_once(&mut self.url, v, "URL")
             }
-            Property::Attendee(v) => Ok(self.attendee.push(v)),
-            Property::Comment(v) => Ok(self.comment.push(v)),
-            Property::FreeBusyTime(v) => Ok(self.freebusy.push(v)),
-            Property::RequestStatus(v) => Ok(self.rstatus.push(v)),
-            Property::Xprop(v) => Ok(self.xprop.push(v)),
-            Property::Iana(v) => Ok(self.iana.push(v)),
+            Property::Attendee(v) => push_ok(&mut self.attendee, v),
+            Property::Comment(v) => push_ok(&mut self.comment, v),
+            Property::FreeBusyTime(v) => push_ok(&mut self.freebusy, v),
+            Property::RequestStatus(v) => push_ok(&mut self.rstatus, v),
+            Property::Xprop(v) => push_ok(&mut self.xprop, v),
+            Property::Iana(v) => push_ok(&mut self.iana, v),
             _ => Err(PropertyError::UnexpectedProperty.into()),
         }
     }
@@ -1764,18 +1781,18 @@ impl PropertyIngest for JournalBuilder {
                 set_once(&mut self.url, v, "URL")
             }
             Property::RRule(v) => set_once(&mut self.rrule, v, "RRULE"),
-            Property::Attachment(v) => Ok(self.attach.push(v)),
-            Property::Attendee(v) => Ok(self.attendee.push(v)),
-            Property::Categories(v) => Ok(self.categories.push(v)),
-            Property::Comment(v) => Ok(self.comment.push(v)),
-            Property::Contact(v) => Ok(self.contact.push(v)),
-            Property::Description(v) => Ok(self.description.push(v)),
-            Property::ExceptionDateTimes(v) => Ok(self.exdate.push(v)),
-            Property::RelatedTo(v) => Ok(self.related.push(v)),
-            Property::RecurrenceDateTimes(v) => Ok(self.rdate.push(v)),
-            Property::RequestStatus(v) => Ok(self.rstatus.push(v)),
-            Property::Xprop(v) => Ok(self.xprop.push(v)),
-            Property::Iana(v) => Ok(self.iana.push(v)),
+            Property::Attachment(v) => push_ok(&mut self.attach, v),
+            Property::Attendee(v) => push_ok(&mut self.attendee, v),
+            Property::Categories(v) => push_ok(&mut self.categories, v),
+            Property::Comment(v) => push_ok(&mut self.comment, v),
+            Property::Contact(v) => push_ok(&mut self.contact, v),
+            Property::Description(v) => push_ok(&mut self.description, v),
+            Property::ExceptionDateTimes(v) => push_ok(&mut self.exdate, v),
+            Property::RelatedTo(v) => push_ok(&mut self.related, v),
+            Property::RecurrenceDateTimes(v) => push_ok(&mut self.rdate, v),
+            Property::RequestStatus(v) => push_ok(&mut self.rstatus, v),
+            Property::Xprop(v) => push_ok(&mut self.xprop, v),
+            Property::Iana(v) => push_ok(&mut self.iana, v),
             _ => Err(PropertyError::UnexpectedProperty.into()),
         }
     }
@@ -1892,8 +1909,8 @@ impl PropertyIngest for TimezoneBuilder {
                 set_once(&mut self.last_mod, v, "LAST-MODIFIED")
             }
             Property::TimeZoneUrl(v) => set_once(&mut self.tzurl, v, "TZURL"),
-            Property::Xprop(v) => Ok(self.xprop.push(v)),
-            Property::Iana(v) => Ok(self.iana.push(v)),
+            Property::Xprop(v) => push_ok(&mut self.xprop, v),
+            Property::Iana(v) => push_ok(&mut self.iana, v),
             _ => Err(PropertyError::UnexpectedProperty.into()),
         }
     }
@@ -1972,11 +1989,11 @@ impl PropertyIngest for TzPropBuilder {
                 set_once(&mut self.tz_offset_from, v, "TZOFFSETFROM")
             }
             Property::RRule(v) => set_once(&mut self.rrule, v, "RRULE"),
-            Property::Comment(v) => Ok(self.comment.push(v)),
-            Property::RecurrenceDateTimes(v) => Ok(self.rdate.push(v)),
-            Property::TimeZoneName(v) => Ok(self.tzname.push(v)),
-            Property::Xprop(v) => Ok(self.xprop.push(v)),
-            Property::Iana(v) => Ok(self.iana.push(v)),
+            Property::Comment(v) => push_ok(&mut self.comment, v),
+            Property::RecurrenceDateTimes(v) => push_ok(&mut self.rdate, v),
+            Property::TimeZoneName(v) => push_ok(&mut self.tzname, v),
+            Property::Xprop(v) => push_ok(&mut self.xprop, v),
+            Property::Iana(v) => push_ok(&mut self.iana, v),
             _ => Err(PropertyError::UnexpectedProperty.into()),
         }
     }

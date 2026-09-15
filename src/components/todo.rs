@@ -1,5 +1,5 @@
 use crate::{
-    components::alarm::Alarm,
+    components::{alarm::Alarm, write_components, write_lines},
     properties::{
         Attachment, Attendee, Categories, Classification, Comment, Completed,
         Contact, DateTimeCreated, DateTimeDue, DateTimeStamp, DateTimeStart,
@@ -256,5 +256,84 @@ impl Todo {
     /// The `VALARM` sub-components attached to this to-do.
     pub fn alarms(&self) -> &[Alarm] {
         &self.alarms
+    }
+}
+
+impl std::fmt::Display for Todo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BEGIN:VTODO\r\n")?;
+        write!(f, "{}\r\n", self.dtstamp)?;
+        write!(f, "{}\r\n", self.uid)?;
+        if let Some(v) = &self.class {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.completed {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.created {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.description {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.dtstart {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.geo {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.last_mod {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.location {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.organizer {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.percent {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.priority {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.recur_id {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.seq {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.status {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.summary {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.url {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.rrule {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.due {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.duration {
+            write!(f, "{v}\r\n")?;
+        }
+        write_lines(f, &self.attach)?;
+        write_lines(f, &self.attendee)?;
+        write_lines(f, &self.categories)?;
+        write_lines(f, &self.comment)?;
+        write_lines(f, &self.contact)?;
+        write_lines(f, &self.exdate)?;
+        write_lines(f, &self.rstatus)?;
+        write_lines(f, &self.related)?;
+        write_lines(f, &self.resources)?;
+        write_lines(f, &self.rdate)?;
+        write_lines(f, &self.xprop)?;
+        write_lines(f, &self.iana)?;
+        write_components(f, &self.alarms)?;
+        write!(f, "END:VTODO\r\n")
     }
 }

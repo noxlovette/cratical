@@ -1,6 +1,9 @@
-use crate::properties::{
-    Action, Attachment, Attendee, Description, Duration, Iana, Repeat, Summary,
-    Trigger, Xprop,
+use crate::{
+    components::write_lines,
+    properties::{
+        Action, Attachment, Attendee, Description, Duration, Iana, Repeat,
+        Summary, Trigger, Xprop,
+    },
 };
 
 /// A "VALARM" calendar component is a grouping of component
@@ -99,5 +102,30 @@ impl Alarm {
     /// The IANA-registered properties this crate doesn't otherwise model.
     pub fn iana(&self) -> &[Iana] {
         &self.iana
+    }
+}
+
+impl std::fmt::Display for Alarm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BEGIN:VALARM\r\n")?;
+        write!(f, "{}\r\n", self.action)?;
+        write!(f, "{}\r\n", self.trigger)?;
+        if let Some(v) = &self.duration {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.repeat {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.description {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.summary {
+            write!(f, "{v}\r\n")?;
+        }
+        write_lines(f, &self.attendee)?;
+        write_lines(f, &self.attach)?;
+        write_lines(f, &self.xprop)?;
+        write_lines(f, &self.iana)?;
+        write!(f, "END:VALARM\r\n")
     }
 }
