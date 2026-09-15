@@ -27,6 +27,13 @@ pub struct Uid(String);
 #[derive(Debug)]
 pub struct Pair<T>(T, T);
 
+impl<T> Pair<T> {
+    /// Constructs a pair directly from its two values.
+    pub fn new(a: T, b: T) -> Self {
+        Self(a, b)
+    }
+}
+
 impl<T> TryFrom<&[u8]> for Pair<T>
 where
     T: for<'a> TryFrom<&'a [u8], Error = values::ValueError>,

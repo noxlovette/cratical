@@ -45,6 +45,32 @@ impl std::fmt::Display for ExceptionDateTimes {
 }
 
 impl ExceptionDateTimes {
+    /// Constructs a new `EXDATE` from its list of values and an optional
+    /// `TZID`, resolving each floating `DATE-TIME` value against it (RFC
+    /// 5545 §3.8.5.1). A homogeneous list of `DATE` values automatically
+    /// gets `VALUE=DATE`.
+    pub fn new(
+        value: Vec<DateOrDatetime>,
+        tzid: Option<TimeZoneIdentifier>,
+    ) -> Self {
+        let value: Vec<_> = value
+            .into_iter()
+            .map(|v| v.resolve_tzid(tzid.as_ref()))
+            .collect();
+        let data_type = value
+            .first()
+            .filter(|v| matches!(v, DateOrDatetime::Date(_)))
+            .map(|_| ValueDataType::Date);
+        Self {
+            value,
+            params: ExDateParams {
+                shared: SharedParams::default(),
+                data_type,
+                tzid,
+            },
+        }
+    }
+
     /// The parsed `EXDATE` values — used by `build()` to cross-check their
     /// value type (DATE vs DATE-TIME) against the component's `DTSTART`
     /// (RFC 5545 §3.8.5.1).
@@ -96,6 +122,33 @@ impl std::fmt::Display for RecurrenceDateTimes {
 }
 
 impl RecurrenceDateTimes {
+    /// Constructs a new `RDATE` from its list of values and an optional
+    /// `TZID`, resolving each floating `DATE-TIME`/`PERIOD` value against
+    /// it (RFC 5545 §3.8.5.2). A homogeneous list of `DATE` or `PERIOD`
+    /// values automatically gets the matching `VALUE` parameter.
+    pub fn new(
+        value: Vec<DateTimePeriod>,
+        tzid: Option<TimeZoneIdentifier>,
+    ) -> Self {
+        let value: Vec<_> = value
+            .into_iter()
+            .map(|v| v.resolve_tzid(tzid.as_ref()))
+            .collect();
+        let data_type = value.first().and_then(|v| match v {
+            DateTimePeriod::Date(_) => Some(ValueDataType::Date),
+            DateTimePeriod::Period(_) => Some(ValueDataType::Period),
+            DateTimePeriod::DateTime(_) => None,
+        });
+        Self {
+            value,
+            params: RDateParams {
+                shared: SharedParams::default(),
+                data_type,
+                tzid,
+            },
+        }
+    }
+
     /// The parsed `RDATE` values — used by `build()` to cross-check their
     /// value type (DATE vs DATE-TIME vs PERIOD) against the component's
     /// `DTSTART` (RFC 5545 §3.8.5.2).
@@ -125,6 +178,7 @@ pub struct RRule {
 }
 
 impl_try_from_bytes!(RRule, Recur);
+impl_simple_property!(RRule, Recur);
 
 impl std::fmt::Display for RRule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -221,6 +275,61 @@ mod tests {
         )
         .unwrap();
         assert_eq!(rdate.value.len(), 2);
+    }
+
+    #[test]
+    fn rrule_new_matches_the_parsed_equivalent() {
+        let recur =
+            crate::values::RecurBuilder::new(crate::values::Frequency::Daily)
+                .count(10)
+                .build()
+                .unwrap();
+        assert_eq!(RRule::new(recur).to_string(), "RRULE:FREQ=DAILY;COUNT=10");
+    }
+
+    #[test]
+    fn exception_date_times_new_sets_value_date_for_date_values() {
+        let date =
+            crate::values::Date::try_from(b"19960402".as_slice()).unwrap();
+        let exdate =
+            ExceptionDateTimes::new(vec![DateOrDatetime::Date(date)], None);
+        assert_eq!(exdate.to_string(), "EXDATE;VALUE=DATE:19960402");
+    }
+
+    #[test]
+    fn exception_date_times_new_resolves_tzid() {
+        let dt =
+            crate::values::DateTime::try_from(b"19980119T020000".as_slice())
+                .unwrap();
+        let tzid: crate::params::TimeZoneIdentifier =
+            b"America/New_York".as_slice().try_into().unwrap();
+        let exdate = ExceptionDateTimes::new(
+            vec![DateOrDatetime::DateTime(dt)],
+            Some(tzid),
+        );
+        assert_eq!(
+            exdate.to_string(),
+            "EXDATE;TZID=America/New_York:19980119T070000Z"
+        );
+    }
+
+    #[test]
+    fn recurrence_date_times_new_sets_value_period() {
+        let start =
+            crate::values::DateTime::try_from(b"19970101T180000Z".as_slice())
+                .unwrap();
+        let end =
+            crate::values::DateTime::try_from(b"19970102T070000Z".as_slice())
+                .unwrap();
+        let period = crate::values::Period::StartEnd { start, end };
+        let rdate = RecurrenceDateTimes::new(
+            vec![crate::values::DateTimePeriod::Period(period)],
+            None,
+        );
+        assert_eq!(
+            rdate.to_string(),
+            "RDATE;VALUE=PERIOD:19970101T180000Z/19970102T070000Z"
+        );
     }
 }
 

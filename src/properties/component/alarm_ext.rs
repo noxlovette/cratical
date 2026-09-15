@@ -25,6 +25,7 @@ pub struct Acknowledged {
 }
 
 impl_try_from_bytes!(Acknowledged, DateTime);
+impl_simple_property!(Acknowledged, DateTime);
 
 impl std::fmt::Display for Acknowledged {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -82,6 +83,7 @@ pub enum ProximityEnum {
 }
 
 impl_try_from_bytes!(Proximity, ProximityEnum);
+impl_simple_property!(Proximity, ProximityEnum);
 
 impl std::fmt::Display for Proximity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -151,5 +153,20 @@ mod tests {
 
         let iana = Proximity::try_from(b":SOME-IANA-VALUE".as_slice()).unwrap();
         assert_eq!(iana.to_string(), "PROXIMITY:SOME-IANA-VALUE");
+    }
+
+    #[test]
+    fn acknowledged_new_matches_the_parsed_equivalent() {
+        let line = "ACKNOWLEDGED:20090604T084500Z";
+        let acknowledged = Acknowledged::new(
+            DateTime::try_from(b"20090604T084500Z".as_slice()).unwrap(),
+        );
+        assert_eq!(acknowledged.to_string(), line);
+    }
+
+    #[test]
+    fn proximity_new_matches_the_parsed_equivalent() {
+        let proximity = Proximity::new(ProximityEnum::Depart);
+        assert_eq!(proximity.to_string(), "PROXIMITY:DEPART");
     }
 }

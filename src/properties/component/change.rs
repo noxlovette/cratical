@@ -18,6 +18,7 @@ pub struct DateTimeCreated {
 }
 
 impl_try_from_bytes!(DateTimeCreated, DateTime);
+impl_simple_property!(DateTimeCreated, DateTime);
 
 impl std::fmt::Display for DateTimeCreated {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -42,6 +43,7 @@ pub struct DateTimeStamp {
 }
 
 impl_try_from_bytes!(DateTimeStamp, DateTime);
+impl_simple_property!(DateTimeStamp, DateTime);
 
 impl std::fmt::Display for DateTimeStamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -64,6 +66,7 @@ pub struct LastModified {
 }
 
 impl_try_from_bytes!(LastModified, DateTime);
+impl_simple_property!(LastModified, DateTime);
 
 impl std::fmt::Display for LastModified {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -86,9 +89,33 @@ pub struct Sequence {
 }
 
 impl_try_from_bytes!(Sequence, Integer);
+impl_simple_property!(Sequence, Integer);
 
 impl std::fmt::Display for Sequence {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "SEQUENCE{}:{}", self.params, self.value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_constructors_match_their_parsed_equivalent() {
+        let dt = DateTime::try_from(b"19960329T133000Z".as_slice()).unwrap();
+        assert_eq!(
+            DateTimeCreated::new(dt).to_string(),
+            "CREATED:19960329T133000Z"
+        );
+        assert_eq!(
+            DateTimeStamp::new(dt).to_string(),
+            "DTSTAMP:19960329T133000Z"
+        );
+        assert_eq!(
+            LastModified::new(dt).to_string(),
+            "LAST-MODIFIED:19960329T133000Z"
+        );
+        assert_eq!(Sequence::new(Integer::new(0)).to_string(), "SEQUENCE:0");
     }
 }

@@ -21,6 +21,7 @@ pub struct TimeZoneIdentifier {
 }
 
 impl_try_from_bytes!(TimeZoneIdentifier);
+impl_simple_property!(TimeZoneIdentifier, Text);
 
 impl TimeZoneIdentifier {
     /// The `TZID` text — used by the calendar-wide check that every `TZID`
@@ -52,6 +53,20 @@ pub struct TimeZoneName {
 }
 
 impl_try_from_bytes!(TimeZoneName, Text, TZNameParams);
+
+impl TimeZoneName {
+    /// Constructs a new `TZNAME` property from its value and an optional
+    /// `LANGUAGE` parameter.
+    pub fn new(value: Text, language: Option<Language>) -> Self {
+        Self {
+            value,
+            params: TZNameParams {
+                shared: SharedParams::default(),
+                language,
+            },
+        }
+    }
+}
 
 impl std::fmt::Display for TimeZoneName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -109,6 +124,7 @@ pub struct TimeZoneOffsetFrom {
 }
 
 impl_try_from_bytes!(TimeZoneOffsetFrom, UtcOffset);
+impl_simple_property!(TimeZoneOffsetFrom, UtcOffset);
 
 impl std::fmt::Display for TimeZoneOffsetFrom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -131,6 +147,7 @@ pub struct TimeZoneOffsetTo {
 }
 
 impl_try_from_bytes!(TimeZoneOffsetTo, UtcOffset);
+impl_simple_property!(TimeZoneOffsetTo, UtcOffset);
 
 impl std::fmt::Display for TimeZoneOffsetTo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -154,9 +171,47 @@ pub struct TimeZoneUrl {
 }
 
 impl_try_from_bytes!(TimeZoneUrl, Uri);
+impl_simple_property!(TimeZoneUrl, Uri);
 
 impl std::fmt::Display for TimeZoneUrl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TZURL{}:{}", self.params, self.value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_constructors_match_their_parsed_equivalent() {
+        assert_eq!(
+            TimeZoneIdentifier::new("America/New_York".into()).to_string(),
+            "TZID:America/New_York"
+        );
+        assert_eq!(
+            TimeZoneName::new("EST".into(), None).to_string(),
+            "TZNAME:EST"
+        );
+        let offset: crate::values::UtcOffset =
+            b"-0500".as_slice().try_into().unwrap();
+        assert_eq!(
+            TimeZoneOffsetFrom::new(offset).to_string(),
+            "TZOFFSETFROM:-0500"
+        );
+        assert_eq!(
+            TimeZoneOffsetTo::new(offset).to_string(),
+            "TZOFFSETTO:-0500"
+        );
+        assert_eq!(
+            TimeZoneUrl::new(
+                Uri::parse(
+                    "http://timezones.example.org/tz/America-Los_Angeles.ics"
+                )
+                .unwrap()
+            )
+            .to_string(),
+            "TZURL:http://timezones.example.org/tz/America-Los_Angeles.ics"
+        );
     }
 }
