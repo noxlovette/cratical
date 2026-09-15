@@ -28,6 +28,7 @@ pub struct Name {
 }
 
 impl_try_from_bytes!(Name, Text, AltrepLanguageParams);
+impl_altrep_language_builder!(NameBuilder, Name, Text);
 
 impl std::fmt::Display for Name {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -57,6 +58,7 @@ pub struct LocationType {
 
 #[cfg(feature = "rfc_9074")]
 impl_try_from_bytes_list!(LocationType, Text, SharedParams);
+impl_simple_property!(LocationType, Vec<Text>);
 
 #[cfg(feature = "rfc_9074")]
 impl std::fmt::Display for LocationType {
@@ -93,5 +95,18 @@ mod tests {
         let loctype =
             LocationType::try_from(line.as_bytes()[13..].as_ref()).unwrap();
         assert_eq!(loctype.to_string(), line);
+    }
+
+    #[test]
+    fn name_builder_round_trips() {
+        let name = NameBuilder::new("Company Vacation".into()).build();
+        assert_eq!(name.to_string(), "NAME:Company Vacation");
+    }
+
+    #[test]
+    fn location_type_new_matches_the_parsed_equivalent() {
+        let loctype =
+            LocationType::new(vec!["HOTEL".into(), "RESTAURANT".into()]);
+        assert_eq!(loctype.to_string(), "LOCATION-TYPE:HOTEL,RESTAURANT");
     }
 }

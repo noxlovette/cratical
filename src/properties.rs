@@ -75,6 +75,71 @@ macro_rules! impl_try_from_bytes_list {
     };
 }
 
+/// Adds a `new` constructor for a client-facing property whose params are
+/// exactly [`SharedParams`] — i.e. it has no RFC-defined parameters of its
+/// own to set, only the value.
+macro_rules! impl_simple_property {
+    ($ty:ident, $value_ty:ty) => {
+        impl $ty {
+            /// Constructs a new property from its value, with no
+            /// parameters set.
+            pub fn new(value: $value_ty) -> Self {
+                Self {
+                    value,
+                    params: crate::properties::SharedParams::default(),
+                }
+            }
+        }
+    };
+}
+
+/// Adds a `<$builder>` type for a client-facing property whose params are
+/// exactly [`AltrepLanguageParams`] (`ALTREP` + `LANGUAGE`), e.g. `COMMENT`,
+/// `DESCRIPTION`, `SUMMARY`.
+macro_rules! impl_altrep_language_builder {
+    ($builder:ident, $prop:ident, $value_ty:ty) => {
+        /// Builder for the property this macro was invoked for.
+        #[derive(Debug)]
+        pub struct $builder {
+            value: $value_ty,
+            params: crate::properties::AltrepLanguageParams,
+        }
+
+        impl $builder {
+            /// Starts a new builder from the property's required value.
+            pub fn new(value: $value_ty) -> Self {
+                Self {
+                    value,
+                    params: Default::default(),
+                }
+            }
+
+            /// Sets the `ALTREP` parameter.
+            pub fn altrep(mut self, altrep: crate::params::Altrep) -> Self {
+                self.params.altrep = Some(altrep);
+                self
+            }
+
+            /// Sets the `LANGUAGE` parameter.
+            pub fn language(
+                mut self,
+                language: crate::params::Language,
+            ) -> Self {
+                self.params.language = Some(language);
+                self
+            }
+
+            /// Finishes the builder, producing the property.
+            pub fn build(self) -> $prop {
+                $prop {
+                    value: self.value,
+                    params: self.params,
+                }
+            }
+        }
+    };
+}
+
 /// Section 3.7
 mod calendar;
 /// Section 3.8
@@ -138,6 +203,30 @@ impl Iana {
             value,
             params,
         })
+    }
+}
+
+impl Xprop {
+    /// Constructs a non-standard `X-` prefixed property from an explicit
+    /// name and value, with no parameters set.
+    pub fn build(name: Text, value: Text) -> Self {
+        Self {
+            name,
+            value,
+            params: SharedParams::default(),
+        }
+    }
+}
+
+impl Iana {
+    /// Constructs an IANA-registered property with no dedicated type, from
+    /// an explicit name and value, with no parameters set.
+    pub fn build(name: Text, value: Text) -> Self {
+        Self {
+            name,
+            value,
+            params: SharedParams::default(),
+        }
     }
 }
 
@@ -343,6 +432,9 @@ pub enum PropertyError {
     /// `PRIORITY`'s value was outside its valid range.
     #[error("invalid value for PRIORITY")]
     InvalidPriority,
+    /// `PERCENT-COMPLETE`'s value was outside its valid range.
+    #[error("invalid value for PERCENT-COMPLETE")]
+    InvalidPercentComplete,
     /// `GEO`'s value couldn't be parsed as a latitude/longitude pair.
     #[error("invalid value for GEO")]
     InvalidGeo,

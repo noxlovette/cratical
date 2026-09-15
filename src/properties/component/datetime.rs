@@ -67,6 +67,7 @@ pub struct Completed {
 }
 
 impl_try_from_bytes!(Completed, DateTime);
+impl_simple_property!(Completed, DateTime);
 
 impl std::fmt::Display for Completed {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -207,6 +208,55 @@ impl std::fmt::Display for DateTimeStart {
     }
 }
 
+/// Adds a `<$builder>` type for a `DATE`-or-`DATE-TIME`-valued property
+/// whose params are exactly [`DateTimeParams`] (`VALUE` + `TZID`) — i.e.
+/// `DTSTART`, `DTEND`, `DUE`.
+macro_rules! impl_date_or_datetime_builder {
+    ($builder:ident, $prop:ident) => {
+        /// Builder for the property this macro was invoked for.
+        #[derive(Debug)]
+        pub struct $builder {
+            value: DateOrDatetime,
+            tzid: Option<TimeZoneIdentifier>,
+        }
+
+        impl $builder {
+            /// Starts a new builder from the property's required value.
+            pub fn new(value: DateOrDatetime) -> Self {
+                Self { value, tzid: None }
+            }
+
+            /// Sets the `TZID` parameter, resolving a floating
+            /// `DATE-TIME` value against it (RFC 5545 §3.3.5). Has no
+            /// effect on a `DATE` value.
+            pub fn tzid(mut self, tzid: TimeZoneIdentifier) -> Self {
+                self.tzid = Some(tzid);
+                self
+            }
+
+            /// Finishes the builder, producing the property. A `DATE`
+            /// value automatically gets `VALUE=DATE`.
+            pub fn build(self) -> $prop {
+                let value = self.value.resolve_tzid(self.tzid.as_ref());
+                let value_data_type = matches!(value, DateOrDatetime::Date(_))
+                    .then_some(ValueDataType::Date);
+                $prop {
+                    value,
+                    params: DateTimeParams {
+                        shared: SharedParams::default(),
+                        value_data_type,
+                        tz_identifier: self.tzid,
+                    },
+                }
+            }
+        }
+    };
+}
+
+impl_date_or_datetime_builder!(DateTimeStartBuilder, DateTimeStart);
+impl_date_or_datetime_builder!(DateTimeEndBuilder, DateTimeEnd);
+impl_date_or_datetime_builder!(DateTimeDueBuilder, DateTimeDue);
+
 /// This property specifies a positive duration of time.
 ///
 /// Example:
@@ -221,6 +271,7 @@ pub struct Duration {
 }
 
 impl_try_from_bytes!(Duration, DurationV);
+impl_simple_property!(Duration, DurationV);
 
 impl std::fmt::Display for Duration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -244,6 +295,20 @@ pub struct FreeBusyTime {
 }
 
 impl_try_from_bytes_list!(FreeBusyTime, Period, FreeBusyTimeParams);
+
+impl FreeBusyTime {
+    /// Constructs a new `FREEBUSY` property from its value and `FBTYPE`
+    /// parameter.
+    pub fn new(value: Period, fb_time_type: Fbtype) -> Self {
+        Self {
+            value,
+            params: FreeBusyTimeParams {
+                shared: SharedParams::default(),
+                fb_time_type,
+            },
+        }
+    }
+}
 
 impl std::fmt::Display for FreeBusyTime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -298,6 +363,7 @@ pub struct TimeTransparency {
 }
 
 impl_try_from_bytes!(TimeTransparency, TranspValue);
+impl_simple_property!(TimeTransparency, TranspValue);
 
 impl std::fmt::Display for TimeTransparency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -383,5 +449,56 @@ mod tests {
     fn duration_property_display_round_trips() {
         let duration = Duration::try_from(b":PT1H0M0S".as_slice()).unwrap();
         assert_eq!(duration.to_string(), "DURATION:PT1H");
+    }
+
+    #[test]
+    fn dtstart_builder_round_trips_a_utc_value_with_no_params() {
+        let dt = DateTime::try_from(b"19980118T073000Z".as_slice()).unwrap();
+        let dtstart =
+            DateTimeStartBuilder::new(DateOrDatetime::DateTime(dt)).build();
+        assert_eq!(dtstart.to_string(), "DTSTART:19980118T073000Z");
+    }
+
+    #[test]
+    fn dtstart_builder_resolves_a_floating_value_against_tzid() {
+        let dt = DateTime::try_from(b"19980119T020000".as_slice()).unwrap();
+        let tzid: TimeZoneIdentifier =
+            b"America/New_York".as_slice().try_into().unwrap();
+        let dtstart = DateTimeStartBuilder::new(DateOrDatetime::DateTime(dt))
+            .tzid(tzid)
+            .build();
+        assert_eq!(
+            dtstart.to_string(),
+            "DTSTART;TZID=America/New_York:19980119T070000Z"
+        );
+    }
+
+    #[test]
+    fn dtend_builder_sets_value_date_for_a_date_value() {
+        let date =
+            crate::values::Date::try_from(b"19980704".as_slice()).unwrap();
+        let dtend = DateTimeEndBuilder::new(DateOrDatetime::Date(date)).build();
+        assert_eq!(dtend.to_string(), "DTEND;VALUE=DATE:19980704");
+    }
+
+    #[test]
+    fn due_builder_round_trips() {
+        let dt = DateTime::try_from(b"19980430T000000Z".as_slice()).unwrap();
+        let due = DateTimeDueBuilder::new(DateOrDatetime::DateTime(dt)).build();
+        assert_eq!(due.to_string(), "DUE:19980430T000000Z");
+    }
+
+    #[test]
+    fn free_busy_time_new_round_trips() {
+        let start = DateTime::try_from(b"19970308T160000Z".as_slice()).unwrap();
+        let duration = crate::values::Duration::new(
+            chrono::Duration::hours(8) + chrono::Duration::minutes(30),
+        );
+        let period = Period::Duration { start, duration };
+        let freebusy = FreeBusyTime::new(period, Fbtype::BusyUnavailable);
+        assert_eq!(
+            freebusy.to_string(),
+            "FREEBUSY;FBTYPE=BUSY-UNAVAILABLE:19970308T160000Z/PT8H30M"
+        );
     }
 }
