@@ -919,9 +919,9 @@ impl Property {
         if let Some(parse) = PROPERTY_DISPATCH.get(name) {
             parse(remainder)
         } else if name.starts_with(b"X-") {
-            Xprop::try_from(remainder).map(Into::into)
+            Xprop::parse(name, remainder).map(Into::into)
         } else {
-            Iana::try_from(remainder).map(Into::into)
+            Iana::parse(name, remainder).map(Into::into)
         }
     }
 }

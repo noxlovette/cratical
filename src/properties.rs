@@ -87,18 +87,63 @@ use thiserror::Error;
 #[derive(Debug)]
 /// X Property
 pub struct Xprop {
+    name: Text,
     value: Text,
     params: SharedParams,
 }
-impl_try_from_bytes!(Xprop);
+
+impl Xprop {
+    /// Parses a non-standard `X-` prefixed property, unlike every other
+    /// property type: `name` isn't a compile-time-known literal here (it's
+    /// arbitrary, caller-defined text), so it has to be captured alongside
+    /// `value`/`params` rather than assumed.
+    pub(crate) fn parse(
+        name: &[u8],
+        remainder: &[u8],
+    ) -> Result<Self, crate::ast::parser::ParseError> {
+        let colon = value_start(remainder)?;
+        let params = SharedParams::try_from(&remainder[..colon])?;
+        let value = Text::try_from(&remainder[colon + 1..])?;
+        let name = Text::try_from(name)?;
+        Ok(Self { name, value, params })
+    }
+}
 
 #[derive(Debug)]
 /// IANA Propery
 pub struct Iana {
+    name: Text,
     value: Text,
     params: SharedParams,
 }
-impl_try_from_bytes!(Iana);
+
+impl Iana {
+    /// Parses an IANA-registered property with no dispatch-table entry of
+    /// its own (see [`Xprop::parse`] for why `name` is captured explicitly
+    /// here rather than assumed).
+    pub(crate) fn parse(
+        name: &[u8],
+        remainder: &[u8],
+    ) -> Result<Self, crate::ast::parser::ParseError> {
+        let colon = value_start(remainder)?;
+        let params = SharedParams::try_from(&remainder[..colon])?;
+        let value = Text::try_from(&remainder[colon + 1..])?;
+        let name = Text::try_from(name)?;
+        Ok(Self { name, value, params })
+    }
+}
+
+impl std::fmt::Display for Xprop {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}:{}", self.name.as_str(), self.params, self.value)
+    }
+}
+
+impl std::fmt::Display for Iana {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}:{}", self.name.as_str(), self.params, self.value)
+    }
+}
 
 use crate::{
     ast::split_once,
@@ -400,7 +445,8 @@ mod tests {
     #[test]
     fn xprop_decodes_rfc_6868_caret_sequences_in_its_params() {
         // collective-icalendar/calendars/rfc_6868.ics
-        let xprop = Xprop::try_from(
+        let xprop = Xprop::parse(
+            b"X-PARAM",
             b";NEWLINE=^n;ALL=^^^'^n;UNKNOWN=^a^ ^asd:asd".as_slice(),
         )
         .unwrap();
@@ -409,6 +455,14 @@ mod tests {
         // ^a and a lone trailing ^ aren't defined sequences, so both are
         // left untouched per RFC 6868 §3.2.
         assert_eq!(xprop.params.iana[2].as_str(), "UNKNOWN=^a^ ^asd");
+    }
+
+    #[test]
+    fn xprop_display_round_trips_the_content_line() {
+        let xprop =
+            Xprop::parse(b"X-WR-CALNAME", b":My Calendar".as_slice())
+                .unwrap();
+        assert_eq!(xprop.to_string(), "X-WR-CALNAME:My Calendar");
     }
 
     #[test]
@@ -429,7 +483,8 @@ mod tests {
         // 7986 §5.10) has no PROPERTY_DISPATCH entry, so it must round-trip
         // through the Iana fallback rather than erroring or truncating,
         // across both the VALUE=URI and VALUE=BINARY (base64) forms.
-        let uri = Iana::try_from(
+        let uri = Iana::parse(
+            b"IMAGE",
             b";VALUE=URI;DISPLAY=BADGE;FMTTYPE=image/png:http://example.com/images/party.png"
                 .as_slice(),
         )
@@ -439,7 +494,8 @@ mod tests {
         assert_eq!(uri.params.iana[2].as_str(), "FMTTYPE=image/png");
         assert_eq!(uri.value.as_str(), "http://example.com/images/party.png");
 
-        let binary = Iana::try_from(
+        let binary = Iana::parse(
+            b"IMAGE",
             b";ENCODING=BASE64;VALUE=BINARY;FMTTYPE=image/png:iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAAnAAAAJwEqCZFPAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAA1JREFUCJlj+P//PwMACPwC/oXNqzQAAAAASUVORK5CYII="
                 .as_slice(),
         )
@@ -453,15 +509,19 @@ mod tests {
     #[test]
     fn image_falls_back_to_iana_across_uri_binary_text_and_unknown_forms() {
         // collective-icalendar/calendars/issue_1561_image_value.ics
-        let uri =
-            Iana::try_from(b";VALUE=URI:https://example.com/a.png".as_slice())
-                .unwrap();
+        let uri = Iana::parse(
+            b"IMAGE",
+            b";VALUE=URI:https://example.com/a.png".as_slice(),
+        )
+        .unwrap();
         assert_eq!(uri.params.iana[0].as_str(), "VALUE=URI");
         assert_eq!(uri.value.as_str(), "https://example.com/a.png");
 
-        let binary =
-            Iana::try_from(b";ENCODING=BASE64;VALUE=BINARY:AP+A".as_slice())
-                .unwrap();
+        let binary = Iana::parse(
+            b"IMAGE",
+            b";ENCODING=BASE64;VALUE=BINARY:AP+A".as_slice(),
+        )
+        .unwrap();
         assert_eq!(binary.params.iana[0].as_str(), "ENCODING=BASE64");
         assert_eq!(binary.params.iana[1].as_str(), "VALUE=BINARY");
         assert_eq!(binary.value.as_str(), "AP+A");
@@ -469,15 +529,33 @@ mod tests {
         // VALUE=TEXT round-trips through Text's own BACKSLASH-escape
         // decoding (RFC 5545 §3.3.11) — the escaped `;`/`,` must be decoded,
         // not mistaken for real param/value-list delimiters.
-        let text = Iana::try_from(br";VALUE=TEXT:a\;b\,c".as_slice()).unwrap();
+        let text =
+            Iana::parse(b"IMAGE", br";VALUE=TEXT:a\;b\,c".as_slice())
+                .unwrap();
         assert_eq!(text.params.iana[0].as_str(), "VALUE=TEXT");
         assert_eq!(text.value.as_str(), "a;b,c");
 
         // No recognized VALUE param at all — still falls back cleanly.
-        let unknown =
-            Iana::try_from(b":https://example.com/b.png".as_slice()).unwrap();
+        let unknown = Iana::parse(
+            b"IMAGE",
+            b":https://example.com/b.png".as_slice(),
+        )
+        .unwrap();
         assert!(unknown.params.iana.is_empty());
         assert_eq!(unknown.value.as_str(), "https://example.com/b.png");
+    }
+
+    #[test]
+    fn iana_display_round_trips_the_content_line() {
+        let iana = Iana::parse(
+            b"IMAGE",
+            b";VALUE=URI:http://example.com/images/party.png".as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            iana.to_string(),
+            "IMAGE;VALUE=URI:http://example.com/images/party.png"
+        );
     }
 
     #[test]
@@ -490,7 +568,8 @@ mod tests {
         // fixture in `link_falls_back_to_iana_and_unfolds_across_rfc_9253_examples`
         // below). CONFERENCE (RFC 7986 §5.11) has no PROPERTY_DISPATCH
         // entry either.
-        let moderator = Iana::try_from(
+        let moderator = Iana::parse(
+            b"CONFERENCE",
             b";VALUE=URI;FEATURE=PHONE,MODERATOR;LABEL=Moderator dial-in:tel:+1-412-555-0123,,,654321"
                 .as_slice(),
         )
@@ -509,7 +588,8 @@ mod tests {
         );
         assert_eq!(moderator.value.as_str(), "tel:+1-412-555-0123,,,654321");
 
-        let video = Iana::try_from(
+        let video = Iana::parse(
+            b"CONFERENCE",
             b";VALUE=URI;FEATURE=AUDIO,VIDEO;LABEL=Attendee dial-in:https://chat.example.com/audio?id=123456"
                 .as_slice(),
         )
@@ -549,6 +629,14 @@ mod tests {
         assert_eq!(links.iana[0].params.iana[1].as_str(), "LABEL=Venue");
         assert_eq!(links.iana[0].params.iana[2].as_str(), "VALUE=URI");
         assert_eq!(links.iana[0].value.as_str(), "https://example.com/events");
+        // The real parser (unlike the hand-assembled Iana::parse calls in
+        // the sibling tests above) is what proves `name` survives end to
+        // end: `Property::parse` captured "LINK" itself, not a value this
+        // test supplied.
+        assert_eq!(
+            links.iana[0].to_string(),
+            "LINK;LINKREL=SOURCE;LABEL=Venue;VALUE=URI:https://example.com/events"
+        );
 
         assert_eq!(
             links.iana[1].params.iana[0].as_str(),
