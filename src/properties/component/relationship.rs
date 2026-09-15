@@ -387,4 +387,78 @@ mod tests {
         assert_eq!(related.params.shared.iana[1].as_str(), "GAP=P1W");
         assert_eq!(related.value.as_str(), "1");
     }
+
+    #[test]
+    fn attendee_delegation_params_parse_multi_value_quoted_lists() {
+        // collective-icalendar/calendars/rfc_7256_multi_value_parameters.ics,
+        // the `UID:list` VEVENT — DELEGATED-TO/DELEGATED-FROM/MEMBER (RFC
+        // 7256 / RFC 5545 §3.2) each carry two comma-separated, individually
+        // DQUOTE-quoted CAL-ADDRESS values in a single parameter.
+        let delegated_to = Attendee::try_from(
+            br#";DELEGATED-TO="mailto:jdoe@example.com","mailto:jqpublic@example.com":mailto:jsmith@example.com"#
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{:?}", delegated_to.params.deletegatee),
+            r#"Some(Delegatees([CalendarUserAddress(Uri(Url { scheme: "mailto", cannot_be_a_base: true, username: "", password: None, host: None, port: None, path: "jdoe@example.com", query: None, fragment: None })), CalendarUserAddress(Uri(Url { scheme: "mailto", cannot_be_a_base: true, username: "", password: None, host: None, port: None, path: "jqpublic@example.com", query: None, fragment: None }))]))"#
+        );
+
+        let delegated_from = Attendee::try_from(
+            br#";DELEGATED-FROM="mailto:jsmith@example.com","mailto:jdoe@example.com":mailto:jdoe@example.com"#
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{:?}", delegated_from.params.delegator),
+            r#"Some(Delegators([CalendarUserAddress(Uri(Url { scheme: "mailto", cannot_be_a_base: true, username: "", password: None, host: None, port: None, path: "jsmith@example.com", query: None, fragment: None })), CalendarUserAddress(Uri(Url { scheme: "mailto", cannot_be_a_base: true, username: "", password: None, host: None, port: None, path: "jdoe@example.com", query: None, fragment: None }))]))"#
+        );
+
+        let member = Attendee::try_from(
+            br#";MEMBER="mailto:projectA@example.com","mailto:projectB@example.com":mailto:janedoe@example.com"#
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{:?}", member.params.member),
+            r#"Some(Member([CalendarUserAddress(Uri(Url { scheme: "mailto", cannot_be_a_base: true, username: "", password: None, host: None, port: None, path: "projectA@example.com", query: None, fragment: None })), CalendarUserAddress(Uri(Url { scheme: "mailto", cannot_be_a_base: true, username: "", password: None, host: None, port: None, path: "projectB@example.com", query: None, fragment: None }))]))"#
+        );
+    }
+
+    #[test]
+    fn attendee_delegation_params_parse_single_value_quoted_lists() {
+        // collective-icalendar/calendars/rfc_7256_multi_value_parameters.ics,
+        // the `UID:single` VEVENT — same three params, but with only one
+        // quoted value each, confirming the comma-list grammar degrades
+        // cleanly to a one-element list rather than requiring 2+ values.
+        let delegated_to = Attendee::try_from(
+            br#";DELEGATED-TO="mailto:jdoe@example.com":mailto:jsmith@example.com"#
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{:?}", delegated_to.params.deletegatee),
+            r#"Some(Delegatees([CalendarUserAddress(Uri(Url { scheme: "mailto", cannot_be_a_base: true, username: "", password: None, host: None, port: None, path: "jdoe@example.com", query: None, fragment: None }))]))"#
+        );
+
+        let delegated_from = Attendee::try_from(
+            br#";DELEGATED-FROM="mailto:jsmith@example.com":mailto:jdoe@example.com"#
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{:?}", delegated_from.params.delegator),
+            r#"Some(Delegators([CalendarUserAddress(Uri(Url { scheme: "mailto", cannot_be_a_base: true, username: "", password: None, host: None, port: None, path: "jsmith@example.com", query: None, fragment: None }))]))"#
+        );
+
+        let member = Attendee::try_from(
+            br#";MEMBER="mailto:projectA@example.com":mailto:janedoe@example.com"#
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{:?}", member.params.member),
+            r#"Some(Member([CalendarUserAddress(Uri(Url { scheme: "mailto", cannot_be_a_base: true, username: "", password: None, host: None, port: None, path: "projectA@example.com", query: None, fragment: None }))]))"#
+        );
+    }
 }
