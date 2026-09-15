@@ -16,9 +16,9 @@ mod datetime;
 /// `COMMENT`, `DESCRIPTION`, `GEO`, `LOCATION`, `PERCENT-COMPLETE`, `PRIORITY`,
 /// `RESOURCES`, `STATUS`, `SUMMARY`.
 mod descriptive;
-/// `VLOCATION` properties (RFC 9073 Section 6.1, RFC 7986 Section 5.1):
-/// `NAME`, `LOCATION-TYPE`.
-#[cfg(feature = "rfc_9074")]
+/// `NAME` (RFC 7986 §5.1, core/always-on) and `LOCATION-TYPE` (RFC 9073
+/// §6.1, gated behind `rfc_9074` since it's only legal on the `VLOCATION`
+/// component that feature adds).
 mod location;
 /// Miscellaneous properties (Section 3.8.8): `REQUEST-STATUS`.
 mod misc;
@@ -39,7 +39,6 @@ pub use availability::*;
 pub use change::*;
 pub use datetime::*;
 pub use descriptive::*;
-#[cfg(feature = "rfc_9074")]
 pub use location::*;
 pub use misc::*;
 pub use recurrence::*;

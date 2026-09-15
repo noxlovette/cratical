@@ -1,12 +1,13 @@
 use crate::{
     components::{alarm::Alarm, write_components, write_lines},
     properties::{
-        Attachment, Attendee, Categories, Classification, Comment, Contact,
-        DateTimeCreated, DateTimeEnd, DateTimeStamp, DateTimeStart,
-        Description, Duration, ExceptionDateTimes, Geo, Iana, LastModified,
-        Location, Organizer, Priority, RRule, RecurrenceDateTimes,
-        RecurrenceId, RelatedTo, RequestStatus, Resources, Sequence, Status,
-        Summary, TimeTransparency, Uid, UniformResourceLocator, Xprop,
+        Attachment, Attendee, Categories, Classification, Color, Comment,
+        Conference, Contact, DateTimeCreated, DateTimeEnd, DateTimeStamp,
+        DateTimeStart, Description, Duration, ExceptionDateTimes, Geo, Iana,
+        Image, LastModified, Location, Organizer, Priority, RRule,
+        RecurrenceDateTimes, RecurrenceId, RelatedTo, RequestStatus, Resources,
+        Sequence, Status, Summary, TimeTransparency, Uid,
+        UniformResourceLocator, Xprop,
     },
 };
 
@@ -181,6 +182,10 @@ pub struct Event {
     pub(crate) related: Vec<RelatedTo>,
     pub(crate) resources: Vec<Resources>,
     pub(crate) rdate: Vec<RecurrenceDateTimes>,
+    /// RFC 7986 §5.9/§5.10/§5.11 — core, not feature-gated.
+    pub(crate) color: Option<Color>,
+    pub(crate) image: Vec<Image>,
+    pub(crate) conference: Vec<Conference>,
     pub(crate) xprop: Vec<Xprop>,
     pub(crate) iana: Vec<Iana>,
     pub(crate) alarms: Vec<Alarm>,
@@ -351,6 +356,21 @@ impl Event {
     pub fn alarms(&self) -> &[Alarm] {
         &self.alarms
     }
+
+    /// The `COLOR` property, if present (RFC 7986 §5.9).
+    pub fn color(&self) -> Option<&Color> {
+        self.color.as_ref()
+    }
+
+    /// The `IMAGE` properties (RFC 7986 §5.10).
+    pub fn image(&self) -> &[Image] {
+        &self.image
+    }
+
+    /// The `CONFERENCE` properties (RFC 7986 §5.11).
+    pub fn conference(&self) -> &[Conference] {
+        &self.conference
+    }
 }
 
 impl std::fmt::Display for Event {
@@ -422,6 +442,11 @@ impl std::fmt::Display for Event {
         write_lines(f, &self.related)?;
         write_lines(f, &self.resources)?;
         write_lines(f, &self.rdate)?;
+        if let Some(v) = &self.color {
+            write!(f, "{v}\r\n")?;
+        }
+        write_lines(f, &self.image)?;
+        write_lines(f, &self.conference)?;
         write_lines(f, &self.xprop)?;
         write_lines(f, &self.iana)?;
         write_components(f, &self.alarms)?;

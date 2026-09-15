@@ -2,6 +2,57 @@
 
 > The name is inspired by the libical repo. In our case, it's crate + ical
 
+## RFC coverage
+
+### Core (always compiled in, no feature flag)
+
+- **[RFC 5545](https://datatracker.ietf.org/doc/html/rfc5545)** — the
+  iCalendar object model itself: `VCALENDAR` and its `VEVENT`/`VTODO`/
+  `VJOURNAL`/`VFREEBUSY`/`VTIMEZONE` components, their properties, parameters,
+  and value types.
+- **[RFC 6868](https://datatracker.ietf.org/doc/html/rfc6868)** — the
+  `^n`/`^'`/`^^` CARET-encoding used to embed newlines and double quotes in a
+  parameter value. See `decode_caret` in `src/ast.rs`.
+- **[RFC 7986](https://datatracker.ietf.org/doc/html/rfc7986)** — new
+  properties (`NAME`, `UID`/`DESCRIPTION`/`LAST-MODIFIED`/`URL`/`CATEGORIES`
+  extended onto `VCALENDAR`, `REFRESH-INTERVAL`, `SOURCE`, `COLOR`, `IMAGE`,
+  `CONFERENCE`) and the `DISPLAY`/`FEATURE`/`LABEL` parameters they use. This
+  *updates* RFC 5545 itself rather than adding a distinct optional component
+  or extension the way RFC 7953/9074 do below, so it's treated as core here
+  too, not behind a feature flag.
+
+### Feature-gated (opt out by disabling default features)
+
+- **`rfc_7953`** — **[RFC 7953](https://datatracker.ietf.org/doc/html/rfc7953)**:
+  the `VAVAILABILITY`/`AVAILABLE` components for publishing free/busy
+  availability. Relevant if you're building a scheduling server; skip it for
+  plain calendar storage/display.
+- **`rfc_9074`** — **[RFC 9074](https://datatracker.ietf.org/doc/html/rfc9074)**:
+  `VALARM`'s `UID`/`RELATED-TO`/`ACKNOWLEDGED`/`PROXIMITY` extensions, for
+  deduplicating and syncing alarms across devices. Also currently carries the
+  one piece of **[RFC 9073](https://datatracker.ietf.org/doc/html/rfc9073)**
+  this crate implements — the `VLOCATION` sub-component nested inside
+  `VALARM` (RFC 9074 §8's proximity extension) — since that's the only
+  context this crate parses it in.
+
+### Not yet implemented
+
+These would each be their own opt-in feature (matching the `rfc_7953`/
+`rfc_9074` pattern above) if added — none of them are needed for plain
+calendar storage/display, which is this crate's current focus:
+
+- **RFC 5546** (iTIP) — scheduling `REQUEST`/`REPLY`/`CANCEL` semantics on
+  top of `METHOD`, not just parsing a `VCALENDAR` object.
+- **RFC 7529** (`RSCALE`) — non-Gregorian recurrence rules (`RRULE`'s
+  `RSCALE=CHINESE` etc.).
+- **RFC 9073** (beyond the `VLOCATION`-in-`VALARM` piece above) — structured
+  data such as `VRESOURCE` and `PARTICIPANT`, relevant for JSCalendar interop
+  or structured event publishing.
+- **RFC 9253** — `RELATED-TO`'s extended `RELTYPE` values and the `LINK`
+  property, for modeling richer event relationships/dependencies. Today
+  these pass straight through this crate's ordinary IANA/`X-`-prefixed
+  extension fallback rather than getting typed support.
+
 ## Test data attribution
 
 Delivering a correct, dependable parser isn't possible by testing only against

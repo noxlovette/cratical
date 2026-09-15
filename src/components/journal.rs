@@ -1,9 +1,9 @@
 use crate::{
     components::write_lines,
     properties::{
-        Attachment, Attendee, Categories, Classification, Comment, Contact,
-        DateTimeCreated, DateTimeStamp, DateTimeStart, Description,
-        ExceptionDateTimes, Iana, LastModified, Organizer, RRule,
+        Attachment, Attendee, Categories, Classification, Color, Comment,
+        Contact, DateTimeCreated, DateTimeStamp, DateTimeStart, Description,
+        ExceptionDateTimes, Iana, Image, LastModified, Organizer, RRule,
         RecurrenceDateTimes, RecurrenceId, RelatedTo, RequestStatus, Sequence,
         Status, Summary, Uid, UniformResourceLocator, Xprop,
     },
@@ -83,6 +83,10 @@ pub struct Journal {
     pub(crate) related: Vec<RelatedTo>,
     pub(crate) rdate: Vec<RecurrenceDateTimes>,
     pub(crate) rstatus: Vec<RequestStatus>,
+    /// RFC 7986 §5.9/§5.10 — core, not feature-gated (no `CONFERENCE`
+    /// here: RFC 7986 §5.11 only allows it on `VEVENT`/`VTODO`).
+    pub(crate) color: Option<Color>,
+    pub(crate) image: Vec<Image>,
     pub(crate) xprop: Vec<Xprop>,
     pub(crate) iana: Vec<Iana>,
 }
@@ -212,6 +216,16 @@ impl Journal {
     pub fn iana(&self) -> &[Iana] {
         &self.iana
     }
+
+    /// The `COLOR` property, if present (RFC 7986 §5.9).
+    pub fn color(&self) -> Option<&Color> {
+        self.color.as_ref()
+    }
+
+    /// The `IMAGE` properties (RFC 7986 §5.10).
+    pub fn image(&self) -> &[Image] {
+        &self.image
+    }
 }
 
 impl std::fmt::Display for Journal {
@@ -262,6 +276,10 @@ impl std::fmt::Display for Journal {
         write_lines(f, &self.related)?;
         write_lines(f, &self.rdate)?;
         write_lines(f, &self.rstatus)?;
+        if let Some(v) = &self.color {
+            write!(f, "{v}\r\n")?;
+        }
+        write_lines(f, &self.image)?;
         write_lines(f, &self.xprop)?;
         write_lines(f, &self.iana)?;
         write!(f, "END:VJOURNAL\r\n")

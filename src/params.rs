@@ -1199,6 +1199,219 @@ impl std::fmt::Display for RecurrenceIdentifierRange {
     }
 }
 
+/// This parameter is used to specify different ways in which an image for
+/// a calendar or component can be displayed.
+///
+/// Applications MUST handle a value they don't recognize (an `x-name` or
+/// `iana-token` other than the four below) the same way they'd handle the
+/// default, `BADGE`.
+///
+/// Example:
+///
+/// > IMAGE;DISPLAY=BADGE,THUMBNAIL;VALUE=URI:https://example.com/image.png
+///
+/// [Section 6.1](https://datatracker.ietf.org/doc/html/rfc7986#section-6.1)
+#[derive(Debug)]
+pub struct ImageDisplay(Vec<ImageDisplayValue>);
+
+/// One value of an [`ImageDisplay`] list.
+#[derive(Debug)]
+pub enum ImageDisplayValue {
+    /// A smaller image inline with the text (the default if `DISPLAY` is
+    /// absent).
+    Badge,
+    /// A full image replacement for the text.
+    Graphic,
+    /// A full-sized image.
+    Fullsize,
+    /// A smaller image thumbnail.
+    Thumbnail,
+    /// A non-standard, `X-`-prefixed value.
+    X(Text),
+    /// A value registered with IANA that isn't one of the values above.
+    Iana(Text),
+}
+
+impl TryFrom<&[u8]> for ImageDisplay {
+    type Error = ParamError;
+
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        let mut vec = Vec::new();
+        for el in b.split(|b| *b == b',') {
+            vec.push(el.try_into()?);
+        }
+        Ok(Self(vec))
+    }
+}
+
+impl TryFrom<&[u8]> for ImageDisplayValue {
+    type Error = ParamError;
+
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        let r = match b {
+            b"BADGE" => Self::Badge,
+            b"GRAPHIC" => Self::Graphic,
+            b"FULLSIZE" => Self::Fullsize,
+            b"THUMBNAIL" => Self::Thumbnail,
+            x => {
+                if x.to_ascii_uppercase().starts_with(b"X-") {
+                    Self::X(x.try_into()?)
+                } else {
+                    Self::Iana(x.try_into()?)
+                }
+            }
+        };
+        Ok(r)
+    }
+}
+
+impl std::fmt::Display for ImageDisplayValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Badge => f.write_str("BADGE"),
+            Self::Graphic => f.write_str("GRAPHIC"),
+            Self::Fullsize => f.write_str("FULLSIZE"),
+            Self::Thumbnail => f.write_str("THUMBNAIL"),
+            Self::X(t) | Self::Iana(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for ImageDisplay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, v) in self.0.iter().enumerate() {
+            if i > 0 {
+                f.write_str(",")?;
+            }
+            write!(f, "{v}")?;
+        }
+        Ok(())
+    }
+}
+
+/// This parameter identifies the type of conferencing system access that a
+/// `CONFERENCE` property's URI provides.
+///
+/// Example:
+///
+/// > CONFERENCE;FEATURE=PHONE,MODERATOR;VALUE=URI:tel:+1-412-555-0123,,,654321
+///
+/// [Section 6.3](https://datatracker.ietf.org/doc/html/rfc7986#section-6.3)
+#[derive(Debug)]
+pub struct Feature(Vec<FeatureValue>);
+
+/// One value of a [`Feature`] list.
+#[derive(Debug)]
+pub enum FeatureValue {
+    /// An audio conference.
+    Audio,
+    /// A live chat conference.
+    Chat,
+    /// A blog or Atom feed.
+    Feed,
+    /// The moderator's dial-in or access code.
+    Moderator,
+    /// A phone conference.
+    Phone,
+    /// A screen-sharing conference.
+    Screen,
+    /// A video conference.
+    Video,
+    /// A non-standard, `X-`-prefixed value.
+    X(Text),
+    /// A value registered with IANA that isn't one of the values above.
+    Iana(Text),
+}
+
+impl TryFrom<&[u8]> for Feature {
+    type Error = ParamError;
+
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        let mut vec = Vec::new();
+        for el in b.split(|b| *b == b',') {
+            vec.push(el.try_into()?);
+        }
+        Ok(Self(vec))
+    }
+}
+
+impl TryFrom<&[u8]> for FeatureValue {
+    type Error = ParamError;
+
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        let r = match b {
+            b"AUDIO" => Self::Audio,
+            b"CHAT" => Self::Chat,
+            b"FEED" => Self::Feed,
+            b"MODERATOR" => Self::Moderator,
+            b"PHONE" => Self::Phone,
+            b"SCREEN" => Self::Screen,
+            b"VIDEO" => Self::Video,
+            x => {
+                if x.to_ascii_uppercase().starts_with(b"X-") {
+                    Self::X(x.try_into()?)
+                } else {
+                    Self::Iana(x.try_into()?)
+                }
+            }
+        };
+        Ok(r)
+    }
+}
+
+impl std::fmt::Display for FeatureValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Audio => f.write_str("AUDIO"),
+            Self::Chat => f.write_str("CHAT"),
+            Self::Feed => f.write_str("FEED"),
+            Self::Moderator => f.write_str("MODERATOR"),
+            Self::Phone => f.write_str("PHONE"),
+            Self::Screen => f.write_str("SCREEN"),
+            Self::Video => f.write_str("VIDEO"),
+            Self::X(t) | Self::Iana(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for Feature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, v) in self.0.iter().enumerate() {
+            if i > 0 {
+                f.write_str(",")?;
+            }
+            write!(f, "{v}")?;
+        }
+        Ok(())
+    }
+}
+
+/// This parameter provides a human-readable label for a `CONFERENCE`
+/// property's access URI, e.g. to distinguish a moderator dial-in from an
+/// attendee one.
+///
+/// Example:
+///
+/// > CONFERENCE;LABEL=Attendee dial-in;VALUE=URI:tel:+1-412-555-0123
+///
+/// [Section 6.4](https://datatracker.ietf.org/doc/html/rfc7986#section-6.4)
+#[derive(Debug)]
+pub struct Label(Text);
+
+impl TryFrom<&[u8]> for Label {
+    type Error = ParamError;
+
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        Ok(Self(maybe_quoted(b).try_into()?))
+    }
+}
+
+impl std::fmt::Display for Label {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.as_str())
+    }
+}
+
 /// A single property parameter (`ALTREP`, `LANGUAGE`, `TZID`, ...) failed to
 /// parse into its typed representation. Not to be confused with
 /// [`ParameterError`], which covers the surrounding `*(";" param)` list

@@ -233,19 +233,22 @@ impl std::fmt::Display for Duration {
 /// Example:
 ///
 /// > FREEBUSY;FBTYPE=BUSY-UNAVAILABLE:19970308T160000Z/PT8H30M
+/// >
+/// > FREEBUSY;FBTYPE=FREE:19970308T160000Z/PT3H,19970308T200000Z/PT1H
 ///
 /// [Section 3.8.2.6](https://datatracker.ietf.org/doc/html/rfc5545#section-3.8.2.6)
 #[derive(Debug)]
 pub struct FreeBusyTime {
-    value: Period,
+    value: Vec<Period>,
     params: FreeBusyTimeParams,
 }
 
-impl_try_from_bytes!(FreeBusyTime, Period, FreeBusyTimeParams);
+impl_try_from_bytes_list!(FreeBusyTime, Period, FreeBusyTimeParams);
 
 impl std::fmt::Display for FreeBusyTime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FREEBUSY{}:{}", self.params, self.value)
+        write!(f, "FREEBUSY{}:", self.params)?;
+        crate::properties::fmt_comma_list(f, &self.value)
     }
 }
 
