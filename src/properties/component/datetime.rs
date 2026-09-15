@@ -299,7 +299,7 @@ impl_try_from_bytes_list!(FreeBusyTime, Period, FreeBusyTimeParams);
 impl FreeBusyTime {
     /// Constructs a new `FREEBUSY` property from its value and `FBTYPE`
     /// parameter.
-    pub fn new(value: Period, fb_time_type: Fbtype) -> Self {
+    pub fn new(value: Vec<Period>, fb_time_type: Fbtype) -> Self {
         Self {
             value,
             params: FreeBusyTimeParams {
@@ -494,8 +494,8 @@ mod tests {
         let duration = crate::values::Duration::new(
             chrono::Duration::hours(8) + chrono::Duration::minutes(30),
         );
-        let period = Period::Duration { start, duration };
-        let freebusy = FreeBusyTime::new(period, Fbtype::BusyUnavailable);
+        let ps = vec![Period::Duration { start, duration }];
+        let freebusy = FreeBusyTime::new(ps, Fbtype::BusyUnavailable);
         assert_eq!(
             freebusy.to_string(),
             "FREEBUSY;FBTYPE=BUSY-UNAVAILABLE:19970308T160000Z/PT8H30M"

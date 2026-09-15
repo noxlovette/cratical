@@ -231,6 +231,7 @@ pub struct Contact {
 }
 
 impl_try_from_bytes!(Contact, Text, AltrepLanguageParams);
+impl_altrep_language_builder!(ContactBuilder, Contact, Text);
 
 impl std::fmt::Display for Contact {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -875,6 +876,18 @@ mod tests {
         assert_eq!(
             recurrence_id.to_string(),
             "RECURRENCE-ID;VALUE=DATE;RANGE=THISANDFUTURE:19960401"
+        );
+    }
+
+    #[test]
+    fn contact_builder_round_trips() {
+        let contact = ContactBuilder::new(
+            "Jim Dolittle, ABC Industries, +1-919-555-1234".into(),
+        )
+        .build();
+        assert_eq!(
+            contact.to_string(),
+            "CONTACT:Jim Dolittle\\, ABC Industries\\, +1-919-555-1234"
         );
     }
 
