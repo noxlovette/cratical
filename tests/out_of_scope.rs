@@ -1,9 +1,16 @@
 //! Regression coverage for the scope decision in issue #7: this crate
-//! targets RFC 5545 core only. `VAVAILABILITY` (RFC 7953, with its
-//! `AVAILABLE` sub-component), `VLOCATION` (RFC 9073, nested inside
-//! `VALARM`), and the RFC 9074 `VALARM` extensions (`UID`, `PROXIMITY`,
-//! `ACKNOWLEDGED`) are deliberately not implemented — see
+//! targets RFC 5545 core, plus `VAVAILABILITY` (RFC 7953, added under the
+//! `rfc_7953` feature — see issue #16). `VLOCATION` (RFC 9073, nested
+//! inside `VALARM`) and the RFC 9074 `VALARM` extensions (`UID`,
+//! `PROXIMITY`, `ACKNOWLEDGED`) remain deliberately not implemented — see
 //! `src/components.rs`'s module doc.
+//!
+//! The `VAVAILABILITY` fixtures below still return `Err` from
+//! `Calendar::parse` even though the component itself is now supported —
+//! see each test's own doc for why (a bare component excerpt with no
+//! `VCALENDAR` wrapper, or one missing `PRODID`/`VERSION`), which is
+//! unrelated to `VAVAILABILITY` support. Real `VAVAILABILITY` parsing
+//! coverage lives in `tests/rfc_7953.rs`.
 //!
 //! Every fixture used here is real-world-valid for the RFC it demonstrates,
 //! but exercises a component/property this crate doesn't model, so it's
@@ -28,7 +35,10 @@ fn fixture(rel: &str) -> Vec<u8> {
 }
 
 /// A bare `VAVAILABILITY` excerpt (RFC 7953 §3.1's first example) with no
-/// `BEGIN:VCALENDAR` wrapper.
+/// `BEGIN:VCALENDAR` wrapper — still an `Err`, but because `Calendar::parse`
+/// requires a full `icalobject`, not because `VAVAILABILITY` is
+/// unsupported. See `tests/rfc_7953.rs` for this same example wrapped in a
+/// minimal `VCALENDAR`, where it parses successfully.
 #[test]
 fn vavailability_example_1_is_not_a_full_calendar_object() {
     let bytes = fixture("availabilities/rfc_7953_1.ics");
@@ -50,14 +60,13 @@ fn vavailability_example_2_is_not_a_full_calendar_object() {
 }
 
 /// This one *is* wrapped in `BEGIN:VCALENDAR`/`END:VCALENDAR`, and its three
-/// top-level `VAVAILABILITY` components are each tolerated as
-/// `Component::Unknown` (same fallback as any unrecognized top-level
-/// component, e.g. issue #13's bare `DAYLIGHT` case) — so this fails later,
-/// on the fixture's own missing `PRODID`/`VERSION`, not on `VAVAILABILITY`
-/// itself. Still an `Err`, for a reason independent of this crate's
-/// `VAVAILABILITY` scope decision.
+/// top-level `VAVAILABILITY` components each parse as real
+/// `Component::Availability` values — but the fixture itself is missing the
+/// calendar-level `PRODID`/`VERSION` properties RFC 5545 §3.4 requires, so
+/// `CalendarBuilder::build` still rejects it. Still an `Err`, for a reason
+/// unrelated to `VAVAILABILITY` support.
 #[test]
-fn vavailability_example_3_tolerated_as_unknown_but_missing_prodid() {
+fn vavailability_example_3_missing_prodid_and_version() {
     let bytes = fixture("calendars/rfc_7953_3.ics");
     assert!(matches!(
         Calendar::parse(&bytes),

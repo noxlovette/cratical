@@ -4,6 +4,8 @@ mod token;
 pub(crate) use lexer::{Lexer, LexerError};
 use parser::{ParseError, ParseResult};
 
+#[cfg(feature = "rfc_7953")]
+use crate::components::availability::{Availability, Available};
 use crate::{
     Calendar,
     calendar::Component as CalComponent,
@@ -184,6 +186,9 @@ enum Component {
     FreeBusy(FreeBusyBuilder),
     /// Time zone definition (`VTIMEZONE`).
     Timezone(TimezoneBuilder),
+    /// Availability information (`VAVAILABILITY`, RFC 7953 §3.1).
+    #[cfg(feature = "rfc_7953")]
+    Availability(AvailabilityBuilder),
     /// An unrecognized `iana-comp`/`x-comp` (RFC 5545 §3.6). See
     /// [`UnknownComponentBuilder`].
     Unknown(UnknownComponentBuilder),
@@ -265,6 +270,13 @@ impl From<TimezoneBuilder> for Component {
     }
 }
 
+#[cfg(feature = "rfc_7953")]
+impl From<AvailabilityBuilder> for Component {
+    fn from(value: AvailabilityBuilder) -> Self {
+        Self::Availability(value)
+    }
+}
+
 impl Component {
     /// Routes one already-parsed [`Property`] into the matching builder's
     /// own fields. Never actually called on `Self::Unknown` — see
@@ -277,6 +289,8 @@ impl Component {
             Self::Journal(b) => b.ingest(p),
             Self::FreeBusy(b) => b.ingest(p),
             Self::Timezone(b) => b.ingest(p),
+            #[cfg(feature = "rfc_7953")]
+            Self::Availability(b) => b.ingest(p),
             Self::Unknown(_) => Err(ParseError::UnknownComponent),
         }
     }
@@ -297,6 +311,23 @@ impl Component {
                 Ok(())
             }
             _ => Err(ParseError::UnexpectedComponent("VALARM")),
+        }
+    }
+
+    /// Routes a fully-parsed `AVAILABLE` sub-component (see
+    /// [`crate::ast::parser::Parser::available`]) into a builder that's
+    /// allowed to contain one — `VAVAILABILITY` only (RFC 7953 §3.1).
+    #[cfg(feature = "rfc_7953")]
+    fn ingest_available(
+        &mut self,
+        available: AvailableBuilder,
+    ) -> ParseResult<()> {
+        match self {
+            Self::Availability(b) => {
+                b.available.push(available);
+                Ok(())
+            }
+            _ => Err(ParseError::UnexpectedComponent("AVAILABLE")),
         }
     }
 
@@ -332,6 +363,8 @@ impl Component {
             Self::Journal(b) => CalComponent::Journal(b.build()?),
             Self::FreeBusy(b) => CalComponent::FreeBusy(b.build()?),
             Self::Timezone(b) => CalComponent::Timezone(b.build()?),
+            #[cfg(feature = "rfc_7953")]
+            Self::Availability(b) => CalComponent::Availability(b.build()?),
             Self::Unknown(b) => CalComponent::Unknown(b.build()),
         })
     }
@@ -608,6 +641,9 @@ pub(crate) enum Property {
     Xprop(Xprop),
     /// An IANA-registered property.
     Iana(Iana),
+    /// `BUSYTYPE` ([`BusyType`]), RFC 7953 §3.1.
+    #[cfg(feature = "rfc_7953")]
+    BusyType(BusyType),
 }
 
 impl From<CalendarScale> for Property {
@@ -850,6 +886,12 @@ impl From<Iana> for Property {
         Self::Iana(value)
     }
 }
+#[cfg(feature = "rfc_7953")]
+impl From<BusyType> for Property {
+    fn from(value: BusyType) -> Self {
+        Self::BusyType(value)
+    }
+}
 
 /// Parses a property's raw, unparsed remainder (`*(";" param) ":" value`,
 /// exactly what a
@@ -866,54 +908,77 @@ type PropertyParser = fn(&[u8]) -> ParseResult<Property>;
 /// map) so the lookup stays O(1) — a compile-time perfect hash, not a
 /// `match` over byte-string patterns (which codegens as a comparison chain,
 /// not a jump table).
-static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> = phf::phf_map! {
-    b"CALSCALE" => |v| CalendarScale::try_from(v).map(Into::into),
-    b"METHOD" => |v| Method::try_from(v).map(Into::into),
-    b"PRODID" => |v| ProductIdentifier::try_from(v).map(Into::into),
-    b"VERSION" => |v| Version::try_from(v).map(Into::into),
-    b"ACTION" => |v| Action::try_from(v).map(Into::into),
-    b"REPEAT" => |v| Repeat::try_from(v).map(Into::into),
-    b"TRIGGER" => |v| Trigger::try_from(v).map(Into::into),
-    b"CREATED" => |v| DateTimeCreated::try_from(v).map(Into::into),
-    b"DTSTAMP" => |v| DateTimeStamp::try_from(v).map(Into::into),
-    b"LAST-MODIFIED" => |v| LastModified::try_from(v).map(Into::into),
-    b"SEQUENCE" => |v| Sequence::try_from(v).map(Into::into),
-    b"COMPLETED" => |v| Completed::try_from(v).map(Into::into),
-    b"DTEND" => |v| DateTimeEnd::try_from(v).map(Into::into),
-    b"DUE" => |v| DateTimeDue::try_from(v).map(Into::into),
-    b"DTSTART" => |v| DateTimeStart::try_from(v).map(Into::into),
-    b"DURATION" => |v| Duration::try_from(v).map(Into::into),
-    b"FREEBUSY" => |v| FreeBusyTime::try_from(v).map(Into::into),
-    b"TRANSP" => |v| TimeTransparency::try_from(v).map(Into::into),
-    b"REQUEST-STATUS" => |v| RequestStatus::try_from(v).map(Into::into),
-    b"ATTACH" => |v| Attachment::try_from(v).map(Into::into),
-    b"CATEGORIES" => |v| Categories::try_from(v).map(Into::into),
-    b"CLASS" => |v| Classification::try_from(v).map(Into::into),
-    b"COMMENT" => |v| Comment::try_from(v).map(Into::into),
-    b"DESCRIPTION" => |v| Description::try_from(v).map(Into::into),
-    b"GEO" => |v| Geo::try_from(v).map(Into::into),
-    b"LOCATION" => |v| Location::try_from(v).map(Into::into),
-    b"PERCENT-COMPLETE" => |v| PercentComplete::try_from(v).map(Into::into),
-    b"PRIORITY" => |v| Priority::try_from(v).map(Into::into),
-    b"RESOURCES" => |v| Resources::try_from(v).map(Into::into),
-    b"STATUS" => |v| Status::try_from(v).map(Into::into),
-    b"SUMMARY" => |v| Summary::try_from(v).map(Into::into),
-    b"ATTENDEE" => |v| Attendee::try_from(v).map(Into::into),
-    b"CONTACT" => |v| Contact::try_from(v).map(Into::into),
-    b"ORGANIZER" => |v| Organizer::try_from(v).map(Into::into),
-    b"RECURRENCE-ID" => |v| RecurrenceId::try_from(v).map(Into::into),
-    b"RELATED-TO" => |v| RelatedTo::try_from(v).map(Into::into),
-    b"URL" => |v| UniformResourceLocator::try_from(v).map(Into::into),
-    b"UID" => |v| Uid::try_from(v).map(Into::into),
-    b"TZID" => |v| TimeZoneIdentifier::try_from(v).map(Into::into),
-    b"TZNAME" => |v| TimeZoneName::try_from(v).map(Into::into),
-    b"TZOFFSETFROM" => |v| TimeZoneOffsetFrom::try_from(v).map(Into::into),
-    b"TZOFFSETTO" => |v| TimeZoneOffsetTo::try_from(v).map(Into::into),
-    b"TZURL" => |v| TimeZoneUrl::try_from(v).map(Into::into),
-    b"EXDATE" => |v| ExceptionDateTimes::try_from(v).map(Into::into),
-    b"RDATE" => |v| RecurrenceDateTimes::try_from(v).map(Into::into),
-    b"RRULE" => |v| RRule::try_from(v).map(Into::into),
+///
+/// Expands to the base entries above (every keyword RFC 5545 itself
+/// defines), with `$($extra)*` spliced in after them for feature-gated
+/// extensions (e.g. `rfc_7953`'s `BUSYTYPE`) — a `cfg` on a `phf_map!` entry
+/// isn't meaningful (the map is built by a proc macro, not expanded as
+/// ordinary items), so the two `PROPERTY_DISPATCH` definitions below select
+/// between the whole map literal via `cfg` on the `static` item itself
+/// instead, sharing this one list of base entries rather than duplicating
+/// it.
+macro_rules! property_dispatch_map {
+    ($($extra:tt)*) => {
+        phf::phf_map! {
+            b"CALSCALE" => |v| CalendarScale::try_from(v).map(Into::into),
+            b"METHOD" => |v| Method::try_from(v).map(Into::into),
+            b"PRODID" => |v| ProductIdentifier::try_from(v).map(Into::into),
+            b"VERSION" => |v| Version::try_from(v).map(Into::into),
+            b"ACTION" => |v| Action::try_from(v).map(Into::into),
+            b"REPEAT" => |v| Repeat::try_from(v).map(Into::into),
+            b"TRIGGER" => |v| Trigger::try_from(v).map(Into::into),
+            b"CREATED" => |v| DateTimeCreated::try_from(v).map(Into::into),
+            b"DTSTAMP" => |v| DateTimeStamp::try_from(v).map(Into::into),
+            b"LAST-MODIFIED" => |v| LastModified::try_from(v).map(Into::into),
+            b"SEQUENCE" => |v| Sequence::try_from(v).map(Into::into),
+            b"COMPLETED" => |v| Completed::try_from(v).map(Into::into),
+            b"DTEND" => |v| DateTimeEnd::try_from(v).map(Into::into),
+            b"DUE" => |v| DateTimeDue::try_from(v).map(Into::into),
+            b"DTSTART" => |v| DateTimeStart::try_from(v).map(Into::into),
+            b"DURATION" => |v| Duration::try_from(v).map(Into::into),
+            b"FREEBUSY" => |v| FreeBusyTime::try_from(v).map(Into::into),
+            b"TRANSP" => |v| TimeTransparency::try_from(v).map(Into::into),
+            b"REQUEST-STATUS" => |v| RequestStatus::try_from(v).map(Into::into),
+            b"ATTACH" => |v| Attachment::try_from(v).map(Into::into),
+            b"CATEGORIES" => |v| Categories::try_from(v).map(Into::into),
+            b"CLASS" => |v| Classification::try_from(v).map(Into::into),
+            b"COMMENT" => |v| Comment::try_from(v).map(Into::into),
+            b"DESCRIPTION" => |v| Description::try_from(v).map(Into::into),
+            b"GEO" => |v| Geo::try_from(v).map(Into::into),
+            b"LOCATION" => |v| Location::try_from(v).map(Into::into),
+            b"PERCENT-COMPLETE" => |v| PercentComplete::try_from(v).map(Into::into),
+            b"PRIORITY" => |v| Priority::try_from(v).map(Into::into),
+            b"RESOURCES" => |v| Resources::try_from(v).map(Into::into),
+            b"STATUS" => |v| Status::try_from(v).map(Into::into),
+            b"SUMMARY" => |v| Summary::try_from(v).map(Into::into),
+            b"ATTENDEE" => |v| Attendee::try_from(v).map(Into::into),
+            b"CONTACT" => |v| Contact::try_from(v).map(Into::into),
+            b"ORGANIZER" => |v| Organizer::try_from(v).map(Into::into),
+            b"RECURRENCE-ID" => |v| RecurrenceId::try_from(v).map(Into::into),
+            b"RELATED-TO" => |v| RelatedTo::try_from(v).map(Into::into),
+            b"URL" => |v| UniformResourceLocator::try_from(v).map(Into::into),
+            b"UID" => |v| Uid::try_from(v).map(Into::into),
+            b"TZID" => |v| TimeZoneIdentifier::try_from(v).map(Into::into),
+            b"TZNAME" => |v| TimeZoneName::try_from(v).map(Into::into),
+            b"TZOFFSETFROM" => |v| TimeZoneOffsetFrom::try_from(v).map(Into::into),
+            b"TZOFFSETTO" => |v| TimeZoneOffsetTo::try_from(v).map(Into::into),
+            b"TZURL" => |v| TimeZoneUrl::try_from(v).map(Into::into),
+            b"EXDATE" => |v| ExceptionDateTimes::try_from(v).map(Into::into),
+            b"RDATE" => |v| RecurrenceDateTimes::try_from(v).map(Into::into),
+            b"RRULE" => |v| RRule::try_from(v).map(Into::into),
+            $($extra)*
+        }
+    };
+}
+
+#[cfg(feature = "rfc_7953")]
+static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> = property_dispatch_map! {
+    b"BUSYTYPE" => |v| BusyType::try_from(v).map(Into::into),
 };
+
+#[cfg(not(feature = "rfc_7953"))]
+static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> =
+    property_dispatch_map! {};
 
 impl Property {
     /// Parses a [`TokenType::Property`](super::ast::token::TokenType::Property)
@@ -1028,7 +1093,12 @@ fn validate_timezones(
 /// the exact same instance: identical `UID` and identical (including both
 /// absent) `RECURRENCE-ID`. Only `VEVENT`/`VTODO`/`VJOURNAL` participate in
 /// this identity model; `VFREEBUSY`'s `UID` identifies a request/reply, not
-/// a recurring instance, so it's excluded.
+/// a recurring instance, so it's excluded — likewise `VAVAILABILITY`'s
+/// `UID` (RFC 7953 §3.1), which identifies that availability block, not a
+/// recurring instance (its nested `AVAILABLE` subcomponents have their own
+/// `UID`/`RECURRENCE-ID` pair, but those are scoped to the enclosing
+/// `VAVAILABILITY` rather than calendar-wide, so they're not checked here
+/// either).
 fn validate_no_duplicate_uid(
     components: &[CalComponent],
 ) -> Result<(), ComponentError> {
@@ -1047,6 +1117,8 @@ fn validate_no_duplicate_uid(
             CalComponent::FreeBusy(_)
             | CalComponent::Timezone(_)
             | CalComponent::Unknown(_) => continue,
+            #[cfg(feature = "rfc_7953")]
+            CalComponent::Availability(_) => continue,
         };
         if seen.contains(&(uid, recurid)) {
             return Err(ComponentError::DuplicateUid(uid.into()));
@@ -1987,6 +2059,272 @@ impl PropertyIngest for TzPropBuilder {
             Property::Comment(v) => push_ok(&mut self.comment, v),
             Property::RecurrenceDateTimes(v) => push_ok(&mut self.rdate, v),
             Property::TimeZoneName(v) => push_ok(&mut self.tzname, v),
+            Property::Xprop(v) => push_ok(&mut self.xprop, v),
+            Property::Iana(v) => push_ok(&mut self.iana, v),
+            _ => Err(PropertyError::UnexpectedProperty.into()),
+        }
+    }
+}
+
+/// Builder for `VAVAILABILITY` (RFC 7953 §3.1). `available` holds its nested
+/// `AVAILABLE` sub-components (see
+/// [`crate::ast::parser::Parser::available`]) — same shape as
+/// `EventBuilder.alarms`/`TodoBuilder.alarms`.
+#[cfg(feature = "rfc_7953")]
+#[derive(Debug, Default)]
+struct AvailabilityBuilder {
+    dtstamp: Option<DateTimeStamp>,
+    uid: Option<Uid>,
+    busytype: Option<BusyType>,
+    class: Option<Classification>,
+    created: Option<DateTimeCreated>,
+    description: Option<Description>,
+    dtstart: Option<DateTimeStart>,
+    last_mod: Option<LastModified>,
+    location: Option<Location>,
+    organizer: Option<Organizer>,
+    priority: Option<Priority>,
+    seq: Option<Sequence>,
+    summary: Option<Summary>,
+    url: Option<UniformResourceLocator>,
+    dtend: Option<DateTimeEnd>,
+    duration: Option<Duration>,
+    categories: Vec<Categories>,
+    comment: Vec<Comment>,
+    contact: Vec<Contact>,
+    xprop: Vec<Xprop>,
+    iana: Vec<Iana>,
+    available: Vec<AvailableBuilder>,
+}
+
+#[cfg(feature = "rfc_7953")]
+impl AvailabilityBuilder {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// Validates the cross-field rules RFC 7953 §3.1 places on
+    /// `VAVAILABILITY` and assembles the finished [`Availability`].
+    fn build(self) -> Result<Availability, ComponentError> {
+        if self.dtend.is_some() && self.duration.is_some() {
+            return Err(ComponentError::MutuallyExclusive("DTEND", "DURATION"));
+        }
+        if self.duration.is_some() && self.dtstart.is_none() {
+            return Err(ComponentError::Requires("DURATION", "DTSTART"));
+        }
+        if let Some(dtstart) = self.dtstart.as_ref() {
+            dtstart.cmp_value_type(
+                self.dtend.as_ref().map(DateTimeEnd::value),
+                "DTEND",
+            )?;
+        }
+        let available = self
+            .available
+            .into_iter()
+            .map(AvailableBuilder::build)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Availability {
+            dtstamp: self
+                .dtstamp
+                .ok_or(ComponentError::MissingField("DTSTAMP"))?,
+            uid: self.uid.ok_or(ComponentError::MissingField("UID"))?,
+            busytype: self.busytype,
+            class: self.class,
+            created: self.created,
+            description: self.description,
+            dtstart: self.dtstart,
+            last_mod: self.last_mod,
+            location: self.location,
+            organizer: self.organizer,
+            priority: self.priority,
+            seq: self.seq,
+            summary: self.summary,
+            url: self.url,
+            dtend: self.dtend,
+            duration: self.duration,
+            categories: self.categories,
+            comment: self.comment,
+            contact: self.contact,
+            xprop: self.xprop,
+            iana: self.iana,
+            available,
+        })
+    }
+}
+
+#[cfg(feature = "rfc_7953")]
+impl PropertyIngest for AvailabilityBuilder {
+    fn ingest(&mut self, p: Property) -> ParseResult<()> {
+        match p {
+            Property::DateTimeStamp(v) => {
+                set_once(&mut self.dtstamp, v, "DTSTAMP")
+            }
+            Property::Uid(v) => set_once(&mut self.uid, v, "UID"),
+            Property::BusyType(v) => {
+                set_once(&mut self.busytype, v, "BUSYTYPE")
+            }
+            Property::Classification(v) => {
+                set_once(&mut self.class, v, "CLASS")
+            }
+            Property::DateTimeCreated(v) => {
+                set_once(&mut self.created, v, "CREATED")
+            }
+            Property::Description(v) => {
+                set_once(&mut self.description, v, "DESCRIPTION")
+            }
+            Property::DateTimeStart(v) => {
+                set_once(&mut self.dtstart, v, "DTSTART")
+            }
+            Property::LastModified(v) => {
+                set_once(&mut self.last_mod, v, "LAST-MODIFIED")
+            }
+            Property::Location(v) => {
+                set_once(&mut self.location, v, "LOCATION")
+            }
+            Property::Organizer(v) => {
+                set_once(&mut self.organizer, v, "ORGANIZER")
+            }
+            Property::Priority(v) => {
+                set_once(&mut self.priority, v, "PRIORITY")
+            }
+            Property::Sequence(v) => set_once(&mut self.seq, v, "SEQUENCE"),
+            Property::Summary(v) => set_once(&mut self.summary, v, "SUMMARY"),
+            Property::UniformResourceLocator(v) => {
+                set_once(&mut self.url, v, "URL")
+            }
+            // DTEND and DURATION are mutually exclusive within a
+            // VAVAILABILITY (RFC 7953 §3.1) — a cross-field rule, checked
+            // in `build()` once every property has been seen, not here.
+            Property::DateTimeEnd(v) => set_once(&mut self.dtend, v, "DTEND"),
+            Property::Duration(v) => {
+                set_once(&mut self.duration, v, "DURATION")
+            }
+            Property::Categories(v) => push_ok(&mut self.categories, v),
+            Property::Comment(v) => push_ok(&mut self.comment, v),
+            Property::Contact(v) => push_ok(&mut self.contact, v),
+            Property::Xprop(v) => push_ok(&mut self.xprop, v),
+            Property::Iana(v) => push_ok(&mut self.iana, v),
+            _ => Err(PropertyError::UnexpectedProperty.into()),
+        }
+    }
+}
+
+/// Builder for `AVAILABLE` (RFC 7953 §3.1), nested only inside a
+/// `VAVAILABILITY` component.
+#[cfg(feature = "rfc_7953")]
+#[derive(Debug, Default)]
+struct AvailableBuilder {
+    dtstamp: Option<DateTimeStamp>,
+    dtstart: Option<DateTimeStart>,
+    uid: Option<Uid>,
+    created: Option<DateTimeCreated>,
+    description: Option<Description>,
+    last_mod: Option<LastModified>,
+    location: Option<Location>,
+    recurid: Option<RecurrenceId>,
+    rrule: Option<RRule>,
+    summary: Option<Summary>,
+    dtend: Option<DateTimeEnd>,
+    duration: Option<Duration>,
+    categories: Vec<Categories>,
+    comment: Vec<Comment>,
+    contact: Vec<Contact>,
+    exdate: Vec<ExceptionDateTimes>,
+    rdate: Vec<RecurrenceDateTimes>,
+    xprop: Vec<Xprop>,
+    iana: Vec<Iana>,
+}
+
+#[cfg(feature = "rfc_7953")]
+impl AvailableBuilder {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// Validates the cross-field rules RFC 7953 §3.1 places on `AVAILABLE`
+    /// and assembles the finished [`Available`].
+    fn build(self) -> Result<Available, ComponentError> {
+        if self.dtend.is_some() && self.duration.is_some() {
+            return Err(ComponentError::MutuallyExclusive("DTEND", "DURATION"));
+        }
+        let dtstart = self
+            .dtstart
+            .ok_or(ComponentError::MissingField("DTSTART"))?;
+        dtstart.cmp_until(self.rrule.as_ref())?;
+        dtstart.cmp_value_type(
+            self.dtend.as_ref().map(DateTimeEnd::value),
+            "DTEND",
+        )?;
+        dtstart.cmp_exdate(&self.exdate)?;
+        dtstart.cmp_rdate(&self.rdate)?;
+        dtstart.cmp_exdate_tzid(&self.exdate)?;
+        dtstart.cmp_rdate_tzid(&self.rdate)?;
+
+        Ok(Available {
+            dtstamp: self.dtstamp,
+            dtstart,
+            uid: self.uid.ok_or(ComponentError::MissingField("UID"))?,
+            created: self.created,
+            description: self.description,
+            last_mod: self.last_mod,
+            location: self.location,
+            recurid: self.recurid,
+            rrule: self.rrule,
+            summary: self.summary,
+            dtend: self.dtend,
+            duration: self.duration,
+            categories: self.categories,
+            comment: self.comment,
+            contact: self.contact,
+            exdate: self.exdate,
+            rdate: self.rdate,
+            xprop: self.xprop,
+            iana: self.iana,
+        })
+    }
+}
+
+#[cfg(feature = "rfc_7953")]
+impl PropertyIngest for AvailableBuilder {
+    fn ingest(&mut self, p: Property) -> ParseResult<()> {
+        match p {
+            Property::DateTimeStamp(v) => {
+                set_once(&mut self.dtstamp, v, "DTSTAMP")
+            }
+            Property::DateTimeStart(v) => {
+                set_once(&mut self.dtstart, v, "DTSTART")
+            }
+            Property::Uid(v) => set_once(&mut self.uid, v, "UID"),
+            Property::DateTimeCreated(v) => {
+                set_once(&mut self.created, v, "CREATED")
+            }
+            Property::Description(v) => {
+                set_once(&mut self.description, v, "DESCRIPTION")
+            }
+            Property::LastModified(v) => {
+                set_once(&mut self.last_mod, v, "LAST-MODIFIED")
+            }
+            Property::Location(v) => {
+                set_once(&mut self.location, v, "LOCATION")
+            }
+            Property::RecurrenceId(v) => {
+                set_once(&mut self.recurid, v, "RECURRENCE-ID")
+            }
+            Property::RRule(v) => set_once(&mut self.rrule, v, "RRULE"),
+            Property::Summary(v) => set_once(&mut self.summary, v, "SUMMARY"),
+            // DTEND and DURATION are mutually exclusive within an AVAILABLE
+            // (RFC 7953 §3.1) — a cross-field rule, checked in `build()`
+            // once every property has been seen, not here.
+            Property::DateTimeEnd(v) => set_once(&mut self.dtend, v, "DTEND"),
+            Property::Duration(v) => {
+                set_once(&mut self.duration, v, "DURATION")
+            }
+            Property::Categories(v) => push_ok(&mut self.categories, v),
+            Property::Comment(v) => push_ok(&mut self.comment, v),
+            Property::Contact(v) => push_ok(&mut self.contact, v),
+            Property::ExceptionDateTimes(v) => push_ok(&mut self.exdate, v),
+            Property::RecurrenceDateTimes(v) => push_ok(&mut self.rdate, v),
             Property::Xprop(v) => push_ok(&mut self.xprop, v),
             Property::Iana(v) => push_ok(&mut self.iana, v),
             _ => Err(PropertyError::UnexpectedProperty.into()),

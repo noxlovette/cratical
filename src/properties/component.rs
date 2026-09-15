@@ -1,5 +1,8 @@
 /// Alarm properties (Section 3.8.6): `ACTION`, `REPEAT`, `TRIGGER`.
 mod alarms;
+/// Availability properties (RFC 7953 Section 3.1): `BUSYTYPE`.
+#[cfg(feature = "rfc_7953")]
+mod availability;
 /// Change-management properties (Section 3.8.7): `CREATED`, `DTSTAMP`,
 /// `LAST-MODIFIED`, `SEQUENCE`.
 mod change;
@@ -22,6 +25,8 @@ mod relationship;
 mod timezone;
 
 pub use alarms::*;
+#[cfg(feature = "rfc_7953")]
+pub use availability::*;
 pub use change::*;
 pub use datetime::*;
 pub use descriptive::*;

@@ -1,16 +1,21 @@
-//! **Scope decision (issue #7):** this crate targets RFC 5545 core only.
-//! `VAVAILABILITY` ([RFC 7953](https://datatracker.ietf.org/doc/html/rfc7953),
-//! with its `AVAILABLE` sub-component) and `VLOCATION` ([RFC
+//! **Scope decision (issue #7):** this crate targets RFC 5545 core, plus
+//! `VAVAILABILITY` (RFC 7953, added under the `rfc_7953` feature — see
+//! issue #16). `VLOCATION` ([RFC
 //! 9073](https://datatracker.ietf.org/doc/html/rfc9073), nested inside
-//! `VALARM`) plus the [RFC 9074](https://datatracker.ietf.org/doc/html/rfc9074)
-//! `VALARM` extensions (`UID`, `PROXIMITY`, `ACKNOWLEDGED`) are deliberately
-//! not implemented — a documented scope decision, not an oversight. Fixture
-//! files for these RFCs exist under `tests/fixtures/collective-icalendar/`
-//! (see `tests/out_of_scope.rs`) but aren't coverage of anything this crate
-//! implements; revisit if/when the crate extends past RFC 5545 core.
+//! `VALARM`) and the [RFC 9074](https://datatracker.ietf.org/doc/html/rfc9074)
+//! `VALARM` extensions (`UID`, `PROXIMITY`, `ACKNOWLEDGED`) remain
+//! deliberately not implemented — a documented scope decision, not an
+//! oversight. Fixture files for these RFCs exist under
+//! `tests/fixtures/collective-icalendar/` (see `tests/out_of_scope.rs`) but
+//! aren't coverage of anything this crate implements; revisit if/when the
+//! crate extends past this scope.
 
 /// The `VALARM` calendar component and its builder.
 pub mod alarm;
+/// The `VAVAILABILITY` calendar component (RFC 7953) and its `AVAILABLE`
+/// sub-component, and their builders.
+#[cfg(feature = "rfc_7953")]
+pub mod availability;
 /// The `VEVENT` calendar component and its builder.
 pub mod event;
 /// The `VFREEBUSY` calendar component and its builder.

@@ -18,12 +18,15 @@
 //! (`MALFORMED_FIXTURES`) and instead get individual, specific assertions in
 //! `tests/malformed_input.rs`.
 //!
-//! Another handful cover components/properties from RFCs later than 5545
-//! (`VAVAILABILITY`, `VLOCATION`, the RFC 9074 `VALARM` extensions) that
-//! this crate has deliberately decided not to implement (see issue #7 and
-//! `src/components.rs`'s module doc) — excluded the same way
-//! (`OUT_OF_SCOPE_FIXTURES`), with dedicated assertions in
-//! `tests/out_of_scope.rs`.
+//! Another handful cover components/properties this crate has deliberately
+//! decided not to implement (`VLOCATION`, the RFC 9074 `VALARM`
+//! extensions — see issue #7 and `src/components.rs`'s module doc), or are
+//! excerpts too incomplete to form a valid `icalobject` on their own (the
+//! three RFC 7953 `VAVAILABILITY` fixtures — bare excerpts with no
+//! `VCALENDAR` wrapper, or missing `PRODID`/`VERSION`; `VAVAILABILITY`
+//! itself is implemented under the `rfc_7953` feature, see issue #16) —
+//! excluded the same way (`OUT_OF_SCOPE_FIXTURES`), with dedicated
+//! assertions in `tests/out_of_scope.rs`.
 
 use std::{
     env, fs,
@@ -53,12 +56,15 @@ const MALFORMED_FIXTURES: &[&str] = &[
      issue_351_whitespace_in_property_and_params.ics",
 ];
 
-/// Files covering RFC 7953 (`VAVAILABILITY`)/RFC 9073 (`VLOCATION`)/RFC 9074
-/// (`VALARM` extensions) — real-world-valid for those RFCs, but this crate
-/// deliberately implements RFC 5545 core only (see issue #7 and
-/// `src/components.rs`'s module doc). Excluded from the blanket "must parse
-/// successfully" generation; each gets a dedicated assertion in
-/// `tests/out_of_scope.rs` instead.
+/// Files covering RFC 9073 (`VLOCATION`)/RFC 9074 (`VALARM` extensions) —
+/// real-world-valid for those RFCs, but this crate deliberately doesn't
+/// implement them (see issue #7 and `src/components.rs`'s module doc) —
+/// plus the three RFC 7953 (`VAVAILABILITY`) fixtures, which this crate
+/// *does* implement (under the `rfc_7953` feature, see issue #16) but are
+/// themselves too incomplete to form a valid `icalobject` (bare excerpts
+/// with no `VCALENDAR` wrapper, or missing `PRODID`/`VERSION`). Excluded
+/// from the blanket "must parse successfully" generation either way; each
+/// gets a dedicated assertion in `tests/out_of_scope.rs` instead.
 const OUT_OF_SCOPE_FIXTURES: &[&str] = &[
     "collective-icalendar/availabilities/rfc_7953_1.ics",
     "collective-icalendar/availabilities/rfc_7953_2.ics",

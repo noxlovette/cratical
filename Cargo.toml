@@ -19,3 +19,8 @@ nanoid = "0.5.0"
 phf = { version = "0.14", features = ["macros"] }
 thiserror = "2"
 url = "2.5.8"
+
+[features]
+default = ["rfc_7953"]
+# RFC 7953: VAVAILABILITY calendar availability component.
+rfc_7953 = []

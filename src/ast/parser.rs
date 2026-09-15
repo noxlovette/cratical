@@ -1,4 +1,6 @@
 use super::token::Token;
+#[cfg(feature = "rfc_7953")]
+use crate::ast::{AvailabilityBuilder, AvailableBuilder};
 use crate::{
     Calendar,
     ast::{
@@ -105,6 +107,8 @@ impl Parser {
             b"VJOURNAL" => JournalBuilder::new().into(),
             b"VFREEBUSY" => FreeBusyBuilder::new().into(),
             b"VTIMEZONE" => TimezoneBuilder::new().into(),
+            #[cfg(feature = "rfc_7953")]
+            b"VAVAILABILITY" => AvailabilityBuilder::new().into(),
             // An unrecognized `iana-comp`/`x-comp` (RFC 5545 §3.6). Not an
             // error — the RFC requires applications to ignore a component
             // type they don't recognize, and discourages silently dropping
@@ -133,6 +137,11 @@ impl Parser {
                     b"STANDARD" | b"DAYLIGHT" => {
                         let (kind, tz_prop) = self.tz_observance()?;
                         component.ingest_tz_observance(kind, tz_prop)?;
+                    }
+                    #[cfg(feature = "rfc_7953")]
+                    b"AVAILABLE" => {
+                        let available = self.available()?;
+                        component.ingest_available(available)?;
                     }
                     _ => return Err(ParseError::UnknownComponent),
                 }
@@ -185,6 +194,37 @@ impl Parser {
         self.consume(Crlf, "expected crlf after END")?;
 
         Ok(alarm)
+    }
+
+    /// parses one `BEGIN:AVAILABLE ... END:AVAILABLE` sub-component (RFC
+    /// 7953 §3.1), nested only inside `VAVAILABILITY` — same shape as
+    /// [`Self::alarm`]: its own grammar production, its own builder type
+    /// ([`AvailableBuilder`], not [`Component`]), no further nesting.
+    #[cfg(feature = "rfc_7953")]
+    fn available(&mut self) -> ParseResult<AvailableBuilder> {
+        let begin =
+            self.consume(Begin, "expected sub-component to start with BEGIN")?;
+        if begin.literal() != b"AVAILABLE" {
+            return Err(ParseError::UnknownComponent);
+        }
+        self.consume(Crlf, "expected crlf after BEGIN")?;
+
+        let mut available = AvailableBuilder::new();
+        while !self.check(End)? {
+            let prop = self.consume(Property, "expected a property line")?;
+            let property = Property::parse(prop.lexeme(), prop.literal())?;
+            self.consume(Crlf, "expected crlf after property")?;
+            available.ingest(property)?;
+        }
+
+        let end =
+            self.consume(End, "expected sub-component to end with END")?;
+        if end.literal() != b"AVAILABLE" {
+            return Err(ParseError::MismatchedEnd);
+        }
+        self.consume(Crlf, "expected crlf after END")?;
+
+        Ok(available)
     }
 
     /// parses one `BEGIN:STANDARD ... END:STANDARD` or `BEGIN:DAYLIGHT ...
