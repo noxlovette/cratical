@@ -40,6 +40,18 @@ impl TryFrom<&[u8]> for DateTimeParams {
     }
 }
 
+impl std::fmt::Display for DateTimeParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.value_data_type {
+            write!(f, ";VALUE={v}")?;
+        }
+        if let Some(v) = &self.tz_identifier {
+            write!(f, ";TZID={v}")?;
+        }
+        write!(f, "{}", self.shared)
+    }
+}
+
 /// This property defines the date and time that a to-do was actually
 /// completed.
 ///
@@ -55,6 +67,12 @@ pub struct Completed {
 }
 
 impl_try_from_bytes!(Completed, DateTime);
+
+impl std::fmt::Display for Completed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "COMPLETED{}:{}", self.params, self.value)
+    }
+}
 
 /// This property specifies the date and time that a calendar component ends.
 ///
@@ -92,6 +110,12 @@ impl DateTimeEnd {
     }
 }
 
+impl std::fmt::Display for DateTimeEnd {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DTEND{}:{}", self.params, self.value)
+    }
+}
+
 /// This property defines the date and time that a to-do is expected to be
 /// completed.
 ///
@@ -124,6 +148,12 @@ impl DateTimeDue {
     /// §3.8.2.3).
     pub(crate) fn value(&self) -> &DateOrDatetime {
         &self.value
+    }
+}
+
+impl std::fmt::Display for DateTimeDue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DUE{}:{}", self.params, self.value)
     }
 }
 
@@ -171,6 +201,12 @@ impl DateTimeStart {
     }
 }
 
+impl std::fmt::Display for DateTimeStart {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DTSTART{}:{}", self.params, self.value)
+    }
+}
+
 /// This property specifies a positive duration of time.
 ///
 /// Example:
@@ -186,6 +222,12 @@ pub struct Duration {
 
 impl_try_from_bytes!(Duration, DurationV);
 
+impl std::fmt::Display for Duration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DURATION{}:{}", self.params, self.value)
+    }
+}
+
 /// This property defines one or more free or busy time intervals.
 ///
 /// Example:
@@ -200,6 +242,12 @@ pub struct FreeBusyTime {
 }
 
 impl_try_from_bytes!(FreeBusyTime, Period, FreeBusyTimeParams);
+
+impl std::fmt::Display for FreeBusyTime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FREEBUSY{}:{}", self.params, self.value)
+    }
+}
 
 #[derive(Debug, Default)]
 struct FreeBusyTimeParams {
@@ -225,6 +273,13 @@ impl TryFrom<&[u8]> for FreeBusyTimeParams {
     }
 }
 
+impl std::fmt::Display for FreeBusyTimeParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, ";FBTYPE={}", self.fb_time_type)?;
+        write!(f, "{}", self.shared)
+    }
+}
+
 /// This property defines whether or not an event is transparent to busy time
 /// searches.
 ///
@@ -240,6 +295,12 @@ pub struct TimeTransparency {
 }
 
 impl_try_from_bytes!(TimeTransparency, TranspValue);
+
+impl std::fmt::Display for TimeTransparency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TRANSP{}:{}", self.params, self.value)
+    }
+}
 
 /// Time transparency value for [`TimeTransparency`].
 #[derive(Debug, Default)]
@@ -266,6 +327,15 @@ impl TryFrom<&[u8]> for TranspValue {
     }
 }
 
+impl std::fmt::Display for TranspValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Opaque => "OPAQUE",
+            Self::Transparent => "TRANSPARENT",
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,5 +355,30 @@ mod tests {
     #[test]
     fn transp_value_rejects_unknown() {
         assert!(TranspValue::try_from(b"BOGUS".as_slice()).is_err());
+    }
+
+    #[test]
+    fn dtstart_display_round_trips_a_utc_value_with_no_params() {
+        let dtstart =
+            DateTimeStart::try_from(b":19980118T073000Z".as_slice()).unwrap();
+        assert_eq!(dtstart.to_string(), "DTSTART:19980118T073000Z");
+    }
+
+    #[test]
+    fn dtstart_display_round_trips_the_tzid_param() {
+        let dtstart = DateTimeStart::try_from(
+            b";TZID=America/New_York:19980119T020000".as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            dtstart.to_string(),
+            "DTSTART;TZID=America/New_York:19980119T070000Z"
+        );
+    }
+
+    #[test]
+    fn duration_property_display_round_trips() {
+        let duration = Duration::try_from(b":PT1H0M0S".as_slice()).unwrap();
+        assert_eq!(duration.to_string(), "DURATION:PT1H");
     }
 }

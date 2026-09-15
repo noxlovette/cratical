@@ -37,6 +37,13 @@ impl TryFrom<&[u8]> for ExceptionDateTimes {
     }
 }
 
+impl std::fmt::Display for ExceptionDateTimes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "EXDATE{}:", self.params)?;
+        crate::properties::fmt_comma_list(f, &self.value)
+    }
+}
+
 impl ExceptionDateTimes {
     /// The parsed `EXDATE` values — used by `build()` to cross-check their
     /// value type (DATE vs DATE-TIME) against the component's `DTSTART`
@@ -81,6 +88,13 @@ impl TryFrom<&[u8]> for RecurrenceDateTimes {
     }
 }
 
+impl std::fmt::Display for RecurrenceDateTimes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RDATE{}:", self.params)?;
+        crate::properties::fmt_comma_list(f, &self.value)
+    }
+}
+
 impl RecurrenceDateTimes {
     /// The parsed `RDATE` values — used by `build()` to cross-check their
     /// value type (DATE vs DATE-TIME vs PERIOD) against the component's
@@ -111,6 +125,12 @@ pub struct RRule {
 }
 
 impl_try_from_bytes!(RRule, Recur);
+
+impl std::fmt::Display for RRule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RRULE{}:{}", self.params, self.value)
+    }
+}
 
 impl RRule {
     /// The parsed `RECUR` value — used by component builders to cross-check
@@ -147,6 +167,18 @@ impl TryFrom<&[u8]> for ExDateParams {
             }
         }
         Ok(params)
+    }
+}
+
+impl std::fmt::Display for ExDateParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.data_type {
+            write!(f, ";VALUE={v}")?;
+        }
+        if let Some(v) = &self.tzid {
+            write!(f, ";TZID={v}")?;
+        }
+        write!(f, "{}", self.shared)
     }
 }
 
@@ -219,5 +251,17 @@ impl TryFrom<&[u8]> for RDateParams {
             }
         }
         Ok(params)
+    }
+}
+
+impl std::fmt::Display for RDateParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.data_type {
+            write!(f, ";VALUE={v}")?;
+        }
+        if let Some(v) = &self.tzid {
+            write!(f, ";TZID={v}")?;
+        }
+        write!(f, "{}", self.shared)
     }
 }

@@ -21,6 +21,12 @@ pub struct RequestStatus {
 
 impl_try_from_bytes!(RequestStatus, Text, RequestStatusParams);
 
+impl std::fmt::Display for RequestStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "REQUEST-STATUS{}:{}", self.params, self.value.as_str())
+    }
+}
+
 #[derive(Debug, Default)]
 struct RequestStatusParams {
     shared: SharedParams,
@@ -42,6 +48,15 @@ impl TryFrom<&[u8]> for RequestStatusParams {
             }
         }
         Ok(params)
+    }
+}
+
+impl std::fmt::Display for RequestStatusParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.language {
+            write!(f, ";LANGUAGE={v}")?;
+        }
+        write!(f, "{}", self.shared)
     }
 }
 

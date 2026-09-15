@@ -211,6 +211,33 @@ impl<'a> Params<'a> for SharedParams {
     }
 }
 
+impl std::fmt::Display for SharedParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Each entry is already the full raw `NAME=VALUE` segment text (see
+        // `absorb`), not a TEXT value, so it's written as-is rather than
+        // through `Text`'s own (TEXT-escaping) `Display`.
+        for t in self.iana.iter().chain(&self.xname) {
+            write!(f, ";{}", t.as_str())?;
+        }
+        Ok(())
+    }
+}
+
+/// Renders `items` as a COMMA-separated list of values, for a property
+/// whose value type is itself a list (e.g. `CATEGORIES`, `EXDATE`).
+pub(crate) fn fmt_comma_list<T: std::fmt::Display>(
+    f: &mut std::fmt::Formatter<'_>,
+    items: &[T],
+) -> std::fmt::Result {
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            f.write_str(",")?;
+        }
+        write!(f, "{item}")?;
+    }
+    Ok(())
+}
+
 /// Shared + Altrep + Language
 ///
 /// These params are shared by multiple properties:
@@ -242,6 +269,18 @@ impl TryFrom<&[u8]> for AltrepLanguageParams {
             }
         }
         Ok(params)
+    }
+}
+
+impl std::fmt::Display for AltrepLanguageParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(altrep) = &self.altrep {
+            write!(f, ";ALTREP={altrep}")?;
+        }
+        if let Some(language) = &self.language {
+            write!(f, ";LANGUAGE={language}")?;
+        }
+        write!(f, "{}", self.shared)
     }
 }
 

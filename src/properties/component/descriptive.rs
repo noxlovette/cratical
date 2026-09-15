@@ -73,6 +73,21 @@ enum AttachmentValue {
     Binary(Binary),
 }
 
+impl std::fmt::Display for Attachment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ATTACH{}:{}", self.params, self.value)
+    }
+}
+
+impl std::fmt::Display for AttachmentValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Uri(u) => write!(f, "{u}"),
+            Self::Binary(b) => write!(f, "{b}"),
+        }
+    }
+}
+
 impl TryFrom<&[u8]> for AttachmentValue {
     type Error = ValueError;
 
@@ -125,6 +140,21 @@ impl TryFrom<&[u8]> for AttachmentParams {
     }
 }
 
+impl std::fmt::Display for AttachmentParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.encoding {
+            write!(f, ";ENCODING={v}")?;
+        }
+        if let Some(v) = &self.value_data_type {
+            write!(f, ";VALUE={v}")?;
+        }
+        if let Some(v) = &self.fmttype {
+            write!(f, ";FMTTYPE={v}")?;
+        }
+        write!(f, "{}", self.shared)
+    }
+}
+
 /// This property is used to specify categories or subtypes of the calendar
 /// component.  The categories are useful in searching for a calendar
 /// component of a particular type and category.  Within the "VEVENT",
@@ -143,6 +173,13 @@ pub struct Categories {
 }
 
 impl_try_from_bytes_list!(Categories, Text, CategoriesParams);
+
+impl std::fmt::Display for Categories {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CATEGORIES{}:", self.params)?;
+        crate::properties::fmt_comma_list(f, &self.value)
+    }
+}
 
 #[derive(Debug, Default)]
 struct CategoriesParams {
@@ -165,6 +202,15 @@ impl TryFrom<&[u8]> for CategoriesParams {
             }
         }
         Ok(params)
+    }
+}
+
+impl std::fmt::Display for CategoriesParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.language {
+            write!(f, ";LANGUAGE={v}")?;
+        }
+        write!(f, "{}", self.shared)
     }
 }
 
@@ -200,6 +246,12 @@ pub struct Classification {
 
 impl_try_from_bytes!(Classification, ClassificationEnum);
 
+impl std::fmt::Display for Classification {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CLASS{}:{}", self.params, self.value)
+    }
+}
+
 #[derive(Debug)]
 enum ClassificationEnum {
     Public,
@@ -231,6 +283,17 @@ impl TryFrom<&[u8]> for ClassificationEnum {
     }
 }
 
+impl std::fmt::Display for ClassificationEnum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Public => f.write_str("PUBLIC"),
+            Self::Private => f.write_str("PRIVATE"),
+            Self::Confidential => f.write_str("CONFIDENTIAL"),
+            Self::Iana(t) | Self::XName(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
 /// This property is used to specify a comment to the calendar user.
 ///
 /// Example:
@@ -247,6 +310,12 @@ pub struct Comment {
 }
 
 impl_try_from_bytes!(Comment, Text, AltrepLanguageParams);
+
+impl std::fmt::Display for Comment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "COMMENT{}:{}", self.params, self.value)
+    }
+}
 
 /// This property is used in the "VEVENT" and "VTODO" to capture lengthy
 /// textual descriptions associated with the activity.
@@ -266,6 +335,12 @@ pub struct Description {
 }
 
 impl_try_from_bytes!(Description, Text, AltrepLanguageParams);
+
+impl std::fmt::Display for Description {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DESCRIPTION{}:{}", self.params, self.value)
+    }
+}
 
 /// This property value specifies latitude and longitude, in that order
 /// (i.e., "LAT LON" ordering).  The longitude represents the location east
@@ -298,6 +373,12 @@ impl_try_from_bytes!(Geo, Pair<Float>, SharedParams, |f: &Pair<Float>| {
     Ok(())
 });
 
+impl std::fmt::Display for Geo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GEO{}:{}", self.params, self.value)
+    }
+}
+
 /// Specific venues such as conference or meeting rooms may be explicitly
 /// specified using this property.  An alternate representation may be
 /// specified that is a URI that points to directory information with more
@@ -318,6 +399,12 @@ pub struct Location {
 }
 
 impl_try_from_bytes!(Location, Text, AltrepLanguageParams);
+
+impl std::fmt::Display for Location {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LOCATION{}:{}", self.params, self.value)
+    }
+}
 
 /// The property value is a positive integer between 0 and 100.  A value of
 /// "0" indicates the to-do has not yet been started.  A value of "100"
@@ -349,6 +436,12 @@ impl_try_from_bytes!(PercentComplete, Integer, SharedParams, |v: &Integer| {
         })
     }
 });
+
+impl std::fmt::Display for PercentComplete {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PERCENT-COMPLETE{}:{}", self.params, self.value)
+    }
+}
 
 /// This priority is specified as an integer in the range 0 to 9.  A value
 /// of 0 specifies an undefined priority.  A value of 1 is the highest
@@ -387,6 +480,12 @@ impl_try_from_bytes!(Priority, Integer, SharedParams, |v: &Integer| {
     }
 });
 
+impl std::fmt::Display for Priority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PRIORITY{}:{}", self.params, self.value)
+    }
+}
+
 /// The property value is an arbitrary text.  More than one resource can be
 /// specified as a COMMA-separated list of resources.
 ///
@@ -402,6 +501,12 @@ pub struct Resources {
 }
 
 impl_try_from_bytes!(Resources, Text, AltrepLanguageParams);
+
+impl std::fmt::Display for Resources {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RESOURCES{}:{}", self.params, self.value)
+    }
+}
 
 /// In a group-scheduled calendar component, the property is used by the
 /// "Organizer" to provide a confirmation of the event to the "Attendees".
@@ -425,6 +530,12 @@ pub struct Status {
 }
 
 impl_try_from_bytes!(Status, StatusValue);
+
+impl std::fmt::Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "STATUS{}:{}", self.params, self.value)
+    }
+}
 
 /// The full set of `STATUS` wire tokens across `VEVENT`, `VTODO`, and
 /// `VJOURNAL`. The raw property text alone doesn't say which component a
@@ -476,6 +587,21 @@ impl TryFrom<&[u8]> for StatusValue {
     }
 }
 
+impl std::fmt::Display for StatusValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Tentative => "TENTATIVE",
+            Self::Confirmed => "CONFIRMED",
+            Self::Cancelled => "CANCELLED",
+            Self::NeedsAction => "NEEDS-ACTION",
+            Self::Completed => "COMPLETED",
+            Self::InProcess => "IN-PROCESS",
+            Self::Draft => "DRAFT",
+            Self::Final => "FINAL",
+        })
+    }
+}
+
 /// This property is used in the "VEVENT", "VTODO", and "VJOURNAL" calendar
 /// components to capture a short, one-line summary about the activity or
 /// journal entry.
@@ -495,6 +621,12 @@ pub struct Summary {
 }
 
 impl_try_from_bytes!(Summary, Text, AltrepLanguageParams);
+
+impl std::fmt::Display for Summary {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SUMMARY{}:{}", self.params, self.value)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -658,5 +790,31 @@ mod tests {
         let values: Vec<&str> =
             categories.value.iter().map(|t| t.as_str()).collect();
         assert_eq!(values, ["Meeting, John", "Work, Sarah", "Project"]);
+    }
+
+    #[test]
+    fn summary_display_round_trips_the_content_line() {
+        let summary = Summary::try_from(b":Department Party".as_slice())
+            .unwrap();
+        assert_eq!(summary.to_string(), "SUMMARY:Department Party");
+    }
+
+    #[test]
+    fn categories_display_round_trips_the_comma_separated_list() {
+        let categories = Categories::try_from(
+            b":Meeting\\, John,Work\\, Sarah,Project".as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            categories.to_string(),
+            "CATEGORIES:Meeting\\, John,Work\\, Sarah,Project"
+        );
+    }
+
+    #[test]
+    fn geo_display_round_trips_the_lat_lon_pair() {
+        let geo = Geo::try_from(b":37.386013;-122.082932".as_slice())
+            .unwrap();
+        assert_eq!(geo.to_string(), "GEO:37.386013;-122.082932");
     }
 }

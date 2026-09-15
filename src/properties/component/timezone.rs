@@ -31,6 +31,12 @@ impl TimeZoneIdentifier {
     }
 }
 
+impl std::fmt::Display for TimeZoneIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TZID{}:{}", self.params, self.value)
+    }
+}
+
 /// This property specifies the customary designation for a time zone
 /// description.
 ///
@@ -46,6 +52,12 @@ pub struct TimeZoneName {
 }
 
 impl_try_from_bytes!(TimeZoneName, Text, TZNameParams);
+
+impl std::fmt::Display for TimeZoneName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TZNAME{}:{}", self.params, self.value)
+    }
+}
 
 #[derive(Debug, Default)]
 struct TZNameParams {
@@ -73,6 +85,15 @@ impl TryFrom<&[u8]> for TZNameParams {
     }
 }
 
+impl std::fmt::Display for TZNameParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.language {
+            write!(f, ";LANGUAGE={v}")?;
+        }
+        write!(f, "{}", self.shared)
+    }
+}
+
 /// This property specifies the offset that is in use prior to this time zone
 /// observance.
 ///
@@ -88,6 +109,12 @@ pub struct TimeZoneOffsetFrom {
 }
 
 impl_try_from_bytes!(TimeZoneOffsetFrom, UtcOffset);
+
+impl std::fmt::Display for TimeZoneOffsetFrom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TZOFFSETFROM{}:{}", self.params, self.value)
+    }
+}
 
 /// This property specifies the UTC offset that is in use in this time zone
 /// observance.
@@ -105,6 +132,12 @@ pub struct TimeZoneOffsetTo {
 
 impl_try_from_bytes!(TimeZoneOffsetTo, UtcOffset);
 
+impl std::fmt::Display for TimeZoneOffsetTo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TZOFFSETTO{}:{}", self.params, self.value)
+    }
+}
+
 /// This property provides a means for a VTIMEZONE component to point to a
 /// network location that can be used to retrieve an up-to-date version of
 /// itself.
@@ -121,3 +154,9 @@ pub struct TimeZoneUrl {
 }
 
 impl_try_from_bytes!(TimeZoneUrl, Uri);
+
+impl std::fmt::Display for TimeZoneUrl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TZURL{}:{}", self.params, self.value)
+    }
+}

@@ -43,6 +43,12 @@ where
     }
 }
 
+impl<T: std::fmt::Display> std::fmt::Display for Pair<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{};{}", self.0, self.1)
+    }
+}
+
 /// A property can have attributes with which it is associated.  These
 /// "property parameters" contain meta-information about the property or
 /// the property value.  Property parameters are provided to specify such

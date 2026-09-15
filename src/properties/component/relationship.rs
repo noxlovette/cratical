@@ -28,6 +28,12 @@ pub struct Attendee {
 
 impl_try_from_bytes!(Attendee, CalendarUserAddress, AttendeeParams);
 
+impl std::fmt::Display for Attendee {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ATTENDEE{}:{}", self.params, self.value)
+    }
+}
+
 /// Parameter bundle for [`Attendee`].
 #[derive(Debug, Default)]
 struct AttendeeParams {
@@ -88,6 +94,42 @@ impl TryFrom<&[u8]> for AttendeeParams {
     }
 }
 
+impl std::fmt::Display for AttendeeParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.language {
+            write!(f, ";LANGUAGE={v}")?;
+        }
+        if let Some(v) = &self.calendar_user_type {
+            write!(f, ";CUTYPE={v}")?;
+        }
+        if let Some(v) = &self.member {
+            write!(f, ";MEMBER={v}")?;
+        }
+        if let Some(v) = &self.status {
+            write!(f, ";PARTSTAT={v}")?;
+        }
+        if let Some(v) = &self.rsvp {
+            write!(f, ";RSVP={v}")?;
+        }
+        if let Some(v) = &self.deletegatee {
+            write!(f, ";DELEGATED-TO={v}")?;
+        }
+        if let Some(v) = &self.delegator {
+            write!(f, ";DELEGATED-FROM={v}")?;
+        }
+        if let Some(v) = &self.sent_by {
+            write!(f, ";SENT-BY={v}")?;
+        }
+        if let Some(v) = &self.common_name {
+            write!(f, ";CN={v}")?;
+        }
+        if let Some(v) = &self.directory {
+            write!(f, ";DIR={v}")?;
+        }
+        write!(f, "{}", self.shared)
+    }
+}
+
 /// This property is used to represent contact information or alternately a
 /// reference to contact information associated with the calendar component.
 ///
@@ -104,6 +146,12 @@ pub struct Contact {
 
 impl_try_from_bytes!(Contact, Text, AltrepLanguageParams);
 
+impl std::fmt::Display for Contact {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CONTACT{}:{}", self.params, self.value)
+    }
+}
+
 /// This property defines the organizer for a calendar component.
 ///
 /// Example:
@@ -118,6 +166,12 @@ pub struct Organizer {
 }
 
 impl_try_from_bytes!(Organizer, CalendarUserAddress, OrgParams);
+
+impl std::fmt::Display for Organizer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ORGANIZER{}:{}", self.params, self.value)
+    }
+}
 
 /// Parameter bundle for [`Organizer`].
 #[derive(Debug, Default)]
@@ -153,6 +207,24 @@ impl TryFrom<&[u8]> for OrgParams {
             }
         }
         Ok(params)
+    }
+}
+
+impl std::fmt::Display for OrgParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.language {
+            write!(f, ";LANGUAGE={v}")?;
+        }
+        if let Some(v) = &self.common_name {
+            write!(f, ";CN={v}")?;
+        }
+        if let Some(v) = &self.directory {
+            write!(f, ";DIR={v}")?;
+        }
+        if let Some(v) = &self.sent_by {
+            write!(f, ";SENT-BY={v}")?;
+        }
+        write!(f, "{}", self.shared)
     }
 }
 
@@ -192,6 +264,12 @@ impl RecurrenceId {
     }
 }
 
+impl std::fmt::Display for RecurrenceId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RECURRENCE-ID{}:{}", self.params, self.value)
+    }
+}
+
 /// Parameter bundle for [`RecurrenceId`].
 #[derive(Debug, Default)]
 struct RecurrenceParams {
@@ -223,6 +301,21 @@ impl TryFrom<&[u8]> for RecurrenceParams {
     }
 }
 
+impl std::fmt::Display for RecurrenceParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.data_type {
+            write!(f, ";VALUE={v}")?;
+        }
+        if let Some(v) = &self.tzid {
+            write!(f, ";TZID={v}")?;
+        }
+        if let Some(v) = &self.recurrence {
+            write!(f, ";RANGE={v}")?;
+        }
+        write!(f, "{}", self.shared)
+    }
+}
+
 /// This property is used to represent a relationship or reference between
 /// one calendar component and another.  The property value consists of the
 /// persistent, globally unique identifier of another calendar component.
@@ -242,6 +335,12 @@ pub struct RelatedTo {
 }
 
 impl_try_from_bytes!(RelatedTo, Text, RelatedToParams);
+
+impl std::fmt::Display for RelatedTo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RELATED-TO{}:{}", self.params, self.value)
+    }
+}
 
 /// Parameter bundle for [`RelatedTo`].
 #[derive(Debug, Default)]
@@ -268,6 +367,15 @@ impl TryFrom<&[u8]> for RelatedToParams {
     }
 }
 
+impl std::fmt::Display for RelatedToParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.rt {
+            write!(f, ";RELTYPE={v}")?;
+        }
+        write!(f, "{}", self.shared)
+    }
+}
+
 /// This property defines a Uniform Resource Locator (URL) associated with
 /// the iCalendar object.
 ///
@@ -283,6 +391,12 @@ pub struct UniformResourceLocator {
 }
 
 impl_try_from_bytes!(UniformResourceLocator, Uri);
+
+impl std::fmt::Display for UniformResourceLocator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "URL{}:{}", self.params, self.value)
+    }
+}
 
 /// This property defines the persistent, globally unique identifier for the
 /// calendar component.  The UID itself MUST be a globally unique identifier.
@@ -310,6 +424,12 @@ impl Uid {
     /// components sharing the same `UID` and `RECURRENCE-ID`.
     pub(crate) fn as_str(&self) -> &str {
         &self.value
+    }
+}
+
+impl std::fmt::Display for Uid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "UID{}:{}", self.params, self.value)
     }
 }
 
@@ -482,6 +602,31 @@ mod tests {
         assert_eq!(
             format!("{:?}", member.params.member),
             r#"Some(Member([CalendarUserAddress(Uri(Url { scheme: "mailto", cannot_be_a_base: true, username: "", password: None, host: None, port: None, path: "projectA@example.com", query: None, fragment: None }))]))"#
+        );
+    }
+
+    #[test]
+    fn attendee_display_round_trips_the_content_line() {
+        let attendee = Attendee::try_from(
+            b";ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;CN=Jane Doe:mailto:jdoe@example.com"
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            attendee.to_string(),
+            "ATTENDEE;PARTSTAT=ACCEPTED;CN=Jane Doe;ROLE=REQ-PARTICIPANT:mailto:jdoe@example.com"
+        );
+    }
+
+    #[test]
+    fn organizer_display_round_trips_the_content_line() {
+        let organizer = Organizer::try_from(
+            b";CN=John Smith:mailto:jsmith@example.com".as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            organizer.to_string(),
+            "ORGANIZER;CN=John Smith:mailto:jsmith@example.com"
         );
     }
 }

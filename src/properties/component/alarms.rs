@@ -36,6 +36,23 @@ pub enum ActionEnum {
 
 impl_try_from_bytes!(Action, ActionEnum);
 
+impl std::fmt::Display for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ACTION{}:{}", self.params, self.value)
+    }
+}
+
+impl std::fmt::Display for ActionEnum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Audio => f.write_str("AUDIO"),
+            Self::Display => f.write_str("DISPLAY"),
+            Self::Email => f.write_str("EMAIL"),
+            Self::Iana(t) | Self::XName(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
 impl Action {
     /// Which `audioprop`/`dispprop`/`emailprop` alternative (RFC 5545
     /// §3.6.6) this action selects — used by `AlarmBuilder::build` to check
@@ -81,6 +98,12 @@ pub struct Repeat {
 
 impl_try_from_bytes!(Repeat, Integer);
 
+impl std::fmt::Display for Repeat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "REPEAT{}:{}", self.params, self.value)
+    }
+}
+
 /// This property specifies when an alarm will trigger.
 ///
 /// Example:
@@ -97,6 +120,12 @@ pub struct Trigger {
 }
 
 impl_try_from_bytes!(Trigger, DateTimeDuration, TriggerParams);
+
+impl std::fmt::Display for Trigger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TRIGGER{}:{}", self.params, self.value)
+    }
+}
 
 #[derive(Debug, Default)]
 struct TriggerParams {
@@ -129,6 +158,21 @@ impl TryFrom<&[u8]> for TriggerParams {
             }
         }
         Ok(params)
+    }
+}
+
+impl std::fmt::Display for TriggerParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.value_data_type {
+            write!(f, ";VALUE={v}")?;
+        }
+        if let Some(v) = &self.tz_identifier {
+            write!(f, ";TZID={v}")?;
+        }
+        if let Some(v) = &self.trigger_relationship {
+            write!(f, ";RELATED={v}")?;
+        }
+        write!(f, "{}", self.shared)
     }
 }
 

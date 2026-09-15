@@ -85,3 +85,27 @@ impl_try_from_bytes!(ProductIdentifier);
 impl_try_from_bytes!(Version);
 impl_try_from_bytes!(Method);
 impl_try_from_bytes!(CalendarScale);
+
+impl std::fmt::Display for CalendarScale {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CALSCALE{}:{}", self.params, self.value)
+    }
+}
+
+impl std::fmt::Display for Method {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "METHOD{}:{}", self.params, self.value)
+    }
+}
+
+impl std::fmt::Display for ProductIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PRODID{}:{}", self.params, self.value)
+    }
+}
+
+impl std::fmt::Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "VERSION{}:{}", self.params, self.value)
+    }
+}

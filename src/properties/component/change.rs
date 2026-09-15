@@ -19,6 +19,12 @@ pub struct DateTimeCreated {
 
 impl_try_from_bytes!(DateTimeCreated, DateTime);
 
+impl std::fmt::Display for DateTimeCreated {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CREATED{}:{}", self.params, self.value)
+    }
+}
+
 /// This property specifies the date and time that the instance of the iCalendar
 /// object was created (when `METHOD` is present), or the date and time that the
 /// calendar component was last revised in the calendar store (when `METHOD` is
@@ -37,6 +43,12 @@ pub struct DateTimeStamp {
 
 impl_try_from_bytes!(DateTimeStamp, DateTime);
 
+impl std::fmt::Display for DateTimeStamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DTSTAMP{}:{}", self.params, self.value)
+    }
+}
+
 /// This property specifies the date and time that the information associated
 /// with the calendar component was last revised in the calendar store.
 ///
@@ -53,6 +65,12 @@ pub struct LastModified {
 
 impl_try_from_bytes!(LastModified, DateTime);
 
+impl std::fmt::Display for LastModified {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LAST-MODIFIED{}:{}", self.params, self.value)
+    }
+}
+
 /// This property defines the revision sequence number of the calendar component
 /// within a sequence of revisions.
 ///
@@ -68,3 +86,9 @@ pub struct Sequence {
 }
 
 impl_try_from_bytes!(Sequence, Integer);
+
+impl std::fmt::Display for Sequence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SEQUENCE{}:{}", self.params, self.value)
+    }
+}

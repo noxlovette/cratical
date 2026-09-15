@@ -1,7 +1,9 @@
 use crate::{
     ast::split_once,
     params::TimeZoneIdentifier,
-    values::datetime::{ICAL_DATE_FMT, ICAL_DATETIME_FMT},
+    values::datetime::{
+        ICAL_DATE_FMT, ICAL_DATETIME_FMT, ICAL_DATETIME_UTC_FMT,
+    },
 };
 use base64::Engine;
 use chrono::{
@@ -1392,6 +1394,134 @@ mod recurrence {
             Ok(recur)
         }
     }
+
+    /// Renders a `BYxxx` rule part (e.g. `BYSECOND=1,2,3`) if `items` isn't
+    /// empty; a no-op otherwise, since an empty `BYxxx` list was never
+    /// specified at all.
+    fn write_by_list<T: std::fmt::Display>(
+        f: &mut std::fmt::Formatter<'_>,
+        name: &str,
+        items: &[T],
+    ) -> std::fmt::Result {
+        if items.is_empty() {
+            return Ok(());
+        }
+        write!(f, ";{name}=")?;
+        for (i, item) in items.iter().enumerate() {
+            if i > 0 {
+                f.write_str(",")?;
+            }
+            write!(f, "{item}")?;
+        }
+        Ok(())
+    }
+
+    impl std::fmt::Display for Recur {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "FREQ={}", self.freq)?;
+            if let Some(until) = &self.until {
+                write!(f, ";UNTIL={until}")?;
+            }
+            if let Some(count) = self.count {
+                write!(f, ";COUNT={count}")?;
+            }
+            if let Some(interval) = self.interval {
+                write!(f, ";INTERVAL={interval}")?;
+            }
+            write_by_list(f, "BYSECOND", &self.by_second)?;
+            write_by_list(f, "BYMINUTE", &self.by_minute)?;
+            write_by_list(f, "BYHOUR", &self.by_hour)?;
+            write_by_list(f, "BYDAY", &self.by_day)?;
+            write_by_list(f, "BYMONTHDAY", &self.by_month_day)?;
+            write_by_list(f, "BYYEARDAY", &self.by_year_day)?;
+            write_by_list(f, "BYWEEKNO", &self.by_week_no)?;
+            write_by_list(f, "BYMONTH", &self.by_month)?;
+            write_by_list(f, "BYSETPOS", &self.by_set_pos)?;
+            if let Some(wkst) = &self.wkst {
+                write!(f, ";WKST={wkst}")?;
+            }
+            Ok(())
+        }
+    }
+
+    impl std::fmt::Display for Frequency {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(match self {
+                Self::Secondly => "SECONDLY",
+                Self::Minutely => "MINUTELY",
+                Self::Hourly => "HOURLY",
+                Self::Daily => "DAILY",
+                Self::Weekly => "WEEKLY",
+                Self::Monthly => "MONTHLY",
+                Self::Yearly => "YEARLY",
+            })
+        }
+    }
+
+    impl std::fmt::Display for Weekday {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(match self {
+                Self::Su => "SU",
+                Self::Mo => "MO",
+                Self::Tu => "TU",
+                Self::We => "WE",
+                Self::Th => "TH",
+                Self::Fr => "FR",
+                Self::Sa => "SA",
+            })
+        }
+    }
+
+    impl std::fmt::Display for Seconds {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl std::fmt::Display for Minutes {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl std::fmt::Display for Hour {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl std::fmt::Display for WeekNum {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl std::fmt::Display for WeekdayNum {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            if let Some(ordinal) = self.ordinal {
+                write!(f, "{ordinal}")?;
+            }
+            write!(f, "{}", self.weekday)
+        }
+    }
+
+    impl std::fmt::Display for MonthNum {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl std::fmt::Display for MonthDayNum {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl std::fmt::Display for YearDayNum {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
 }
 
 /// [RFC 4288](https://datatracker.ietf.org/doc/html/rfc4288#section-4.2)
@@ -1585,6 +1715,173 @@ pub enum ValueError {
         /// What we actually received
         received: Option<String>,
     },
+}
+
+impl std::fmt::Display for DateOrDatetime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Date(d) => write!(f, "{d}"),
+            Self::DateTime(dt) => write!(f, "{dt}"),
+        }
+    }
+}
+
+impl std::fmt::Display for DateTimePeriod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Date(d) => write!(f, "{d}"),
+            Self::DateTime(dt) => write!(f, "{dt}"),
+            Self::Period(p) => write!(f, "{p}"),
+        }
+    }
+}
+
+impl std::fmt::Display for DateTimeDuration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Duration(d) => write!(f, "{d}"),
+            Self::DateTime(dt) => write!(f, "{dt}"),
+        }
+    }
+}
+
+impl std::fmt::Display for Duration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let negative = self.0 < ChronoDuration::zero();
+        let abs = if negative { -self.0 } else { self.0 };
+        if negative {
+            f.write_str("-")?;
+        }
+        f.write_str("P")?;
+
+        let total_secs = abs.num_seconds();
+        const WEEK: i64 = 7 * 24 * 3600;
+        if total_secs != 0 && total_secs % WEEK == 0 {
+            return write!(f, "{}W", total_secs / WEEK);
+        }
+
+        let days = total_secs / 86400;
+        let rem = total_secs % 86400;
+        let hours = rem / 3600;
+        let minutes = (rem % 3600) / 60;
+        let seconds = rem % 60;
+
+        if days != 0 {
+            write!(f, "{days}D")?;
+        }
+        if hours != 0 || minutes != 0 || seconds != 0 || days == 0 {
+            f.write_str("T")?;
+            if hours != 0 {
+                write!(f, "{hours}H")?;
+            }
+            if minutes != 0 {
+                write!(f, "{minutes}M")?;
+            }
+            if seconds != 0 || (hours == 0 && minutes == 0) {
+                write!(f, "{seconds}S")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for DateTime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Utc(dt) => write!(f, "{}", dt.format(ICAL_DATETIME_UTC_FMT)),
+            Self::Floating(dt) => {
+                write!(f, "{}", dt.format(ICAL_DATETIME_FMT))
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for Date {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.format(ICAL_DATE_FMT))
+    }
+}
+
+impl std::fmt::Display for UtcOffset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let total = self.0.local_minus_utc();
+        let sign = if total < 0 { '-' } else { '+' };
+        let abs = total.unsigned_abs();
+        let hours = abs / 3600;
+        let minutes = (abs % 3600) / 60;
+        let seconds = abs % 60;
+        if seconds == 0 {
+            write!(f, "{sign}{hours:02}{minutes:02}")
+        } else {
+            write!(f, "{sign}{hours:02}{minutes:02}{seconds:02}")
+        }
+    }
+}
+
+impl std::fmt::Display for Period {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::StartEnd { start, end } => write!(f, "{start}/{end}"),
+            Self::Duration { start, duration } => {
+                write!(f, "{start}/{duration}")
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for Time {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let time = match self {
+            Self::Floating(t) => t,
+            Self::Zoned { time, .. } => time,
+        };
+        write!(f, "{}", time.format("%H%M%S"))
+    }
+}
+
+impl std::fmt::Display for Binary {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&base64::engine::general_purpose::STANDARD.encode(&self.0))
+    }
+}
+
+impl std::fmt::Display for Boolean {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(if self.0 { "TRUE" } else { "FALSE" })
+    }
+}
+
+impl std::fmt::Display for Text {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for c in self.0.chars() {
+            match c {
+                '\\' => f.write_str("\\\\")?,
+                ';' => f.write_str("\\;")?,
+                ',' => f.write_str("\\,")?,
+                '\n' => f.write_str("\\n")?,
+                _ => write!(f, "{c}")?,
+            }
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Uri {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for Integer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for Float {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 #[cfg(test)]
@@ -1875,5 +2172,60 @@ mod tests {
         // rather than silently dropped.
         let text = Text::try_from(b"C:\\at".as_slice()).unwrap();
         assert_eq!(text.as_str(), "C:\\at");
+    }
+
+    #[test]
+    fn text_display_escapes_backslash_semicolon_comma_and_newline() {
+        let text = Text::try_from(b"a\\\\b,c\\;d\\,e\\nf\\Ng".as_slice())
+            .unwrap();
+        assert_eq!(text.to_string(), "a\\\\b\\,c\\;d\\,e\\nf\\ng");
+    }
+
+    #[test]
+    fn date_display_matches_ical_wire_format() {
+        let date = Date::try_from(b"19970714".as_slice()).unwrap();
+        assert_eq!(date.to_string(), "19970714");
+    }
+
+    #[test]
+    fn date_time_display_round_trips_utc_and_floating_forms() {
+        let utc = DateTime::try_from(b"19980119T070000Z".as_slice()).unwrap();
+        assert_eq!(utc.to_string(), "19980119T070000Z");
+
+        let floating =
+            DateTime::try_from(b"19980118T230000".as_slice()).unwrap();
+        assert_eq!(floating.to_string(), "19980118T230000");
+    }
+
+    #[test]
+    fn utc_offset_display_examples_from_rfc() {
+        let west = UtcOffset::try_from(b"-0500".as_slice()).unwrap();
+        assert_eq!(west.to_string(), "-0500");
+
+        let east = UtcOffset::try_from(b"+0100".as_slice()).unwrap();
+        assert_eq!(east.to_string(), "+0100");
+
+        let secs = UtcOffset::try_from(b"-075258".as_slice()).unwrap();
+        assert_eq!(secs.to_string(), "-075258");
+    }
+
+    #[test]
+    fn duration_display_round_trips_rfc_examples() {
+        let d = Duration::try_from(b"P15DT5H0M20S".as_slice()).unwrap();
+        assert_eq!(d.to_string(), "P15DT5H20S");
+
+        let d = Duration::try_from(b"P7W".as_slice()).unwrap();
+        assert_eq!(d.to_string(), "P7W");
+
+        let d = Duration::try_from(b"-PT15M".as_slice()).unwrap();
+        assert_eq!(d.to_string(), "-PT15M");
+    }
+
+    #[test]
+    fn recur_display_round_trips_freq_and_byday() {
+        let recur =
+            Recur::try_from(b"FREQ=MONTHLY;BYDAY=-1MO;COUNT=5".as_slice())
+                .unwrap();
+        assert_eq!(recur.to_string(), "FREQ=MONTHLY;COUNT=5;BYDAY=-1MO");
     }
 }
