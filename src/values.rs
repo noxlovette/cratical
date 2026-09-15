@@ -1421,6 +1421,12 @@ impl TryFrom<&[u8]> for MediaType {
     }
 }
 
+impl std::fmt::Display for MediaType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.media_type.as_str(), self.subtype.as_str())
+    }
+}
+
 impl TryFrom<&[u8]> for Text {
     type Error = ValueError;
 
@@ -1475,6 +1481,12 @@ impl TryFrom<&[u8]> for CalendarUserAddress {
         } else {
             Ok(Self(uri))
         }
+    }
+}
+
+impl std::fmt::Display for CalendarUserAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self.0)
     }
 }
 

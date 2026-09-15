@@ -939,6 +939,265 @@ impl TryFrom<&[u8]> for RecurrenceIdentifierRange {
     }
 }
 
+/// Renders as an RFC 5545 `param-value` (`paramtext / quoted-string`,
+/// §3.2's grammar for a parameter whose quoting is optional): wrapped in
+/// DQUOTEs when it contains a COLON, SEMICOLON, or COMMA — the characters
+/// `paramtext` excludes — left bare otherwise.
+trait FmtParamValue {
+    fn fmt_param_value(&self, f: &mut std::fmt::Formatter<'_>)
+    -> std::fmt::Result;
+}
+
+impl FmtParamValue for str {
+    fn fmt_param_value(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        if self.contains([':', ';', ',']) {
+            write!(f, "\"{self}\"")
+        } else {
+            f.write_str(self)
+        }
+    }
+}
+
+/// Renders as a COMMA-separated list of calendar addresses, each wrapped in
+/// a quoted-string as RFC 5545 requires for `DELEGATED-FROM`/`DELEGATED-TO`/
+/// `MEMBER` (§3.2.4, §3.2.5, §3.2.11).
+trait FmtQuotedAddressList {
+    fn fmt_quoted_address_list(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result;
+}
+
+impl FmtQuotedAddressList for [CalendarUserAddress] {
+    fn fmt_quoted_address_list(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        for (i, addr) in self.iter().enumerate() {
+            if i > 0 {
+                f.write_str(",")?;
+            }
+            write!(f, "\"{addr}\"")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for ValueDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Binary => f.write_str("BINARY"),
+            Self::Uri => f.write_str("URI"),
+            Self::Text => f.write_str("TEXT"),
+            Self::Boolean => f.write_str("BOOLEAN"),
+            Self::CalAddress => f.write_str("CAL-ADDRESS"),
+            Self::Date => f.write_str("DATE"),
+            Self::DateTime => f.write_str("DATE-TIME"),
+            Self::Duration => f.write_str("DURATION"),
+            Self::Float => f.write_str("FLOAT"),
+            Self::Integer => f.write_str("INTEGER"),
+            Self::Period => f.write_str("PERIOD"),
+            Self::Recur => f.write_str("RECUR"),
+            Self::Time => f.write_str("TIME"),
+            Self::UtcOffset => f.write_str("UTC-OFFSET"),
+            Self::XName(t) | Self::Iana(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for Altrep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\"{}\"", *self.0)
+    }
+}
+
+impl std::fmt::Display for CommonName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.as_str().fmt_param_value(f)
+    }
+}
+
+impl std::fmt::Display for Delegators {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt_quoted_address_list(f)
+    }
+}
+
+impl std::fmt::Display for Delegatees {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt_quoted_address_list(f)
+    }
+}
+
+impl std::fmt::Display for DirectoryEntryReference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\"{}\"", *self.0)
+    }
+}
+
+impl std::fmt::Display for Encoding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Bit8 => "8BIT",
+            Self::Base64 => "BASE64",
+        })
+    }
+}
+
+impl std::fmt::Display for Fmttype {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for Fbtype {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Free => f.write_str("FREE"),
+            Self::Busy => f.write_str("BUSY"),
+            Self::BusyUnavailable => f.write_str("BUSY-UNAVAILABLE"),
+            Self::BusyTentative => f.write_str("BUSY-TENTATIVE"),
+            Self::X(t) | Self::Iana(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for Language {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for Member {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt_quoted_address_list(f)
+    }
+}
+
+impl std::fmt::Display for CalendarUserType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Individual => f.write_str("INDIVIDUAL"),
+            Self::Group => f.write_str("GROUP"),
+            Self::Resource => f.write_str("RESOURCE"),
+            Self::Room => f.write_str("ROOM"),
+            Self::Unknown => f.write_str("UNKNOWN"),
+            Self::X(t) | Self::Iana(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for ParticipationStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Event(s) => write!(f, "{s}"),
+            Self::Todo(s) => write!(f, "{s}"),
+            Self::Journal(s) => write!(f, "{s}"),
+            Self::X(t) | Self::Iana(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for Rsvp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(if *self.0 { "TRUE" } else { "FALSE" })
+    }
+}
+
+impl std::fmt::Display for SentBy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\"{}\"", self.0)
+    }
+}
+
+impl std::fmt::Display for TimeZoneIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for ParticipationRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Chair => f.write_str("CHAIR"),
+            Self::ReqParticipant => f.write_str("REQ-PARTICIPANT"),
+            Self::OptParticipant => f.write_str("OPT-PARTICIPANT"),
+            Self::NonParticipant => f.write_str("NON-PARTICIPANT"),
+            Self::X(t) | Self::Iana(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for PartStatEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NeedsAction => f.write_str("NEEDS-ACTION"),
+            Self::Accepted => f.write_str("ACCEPTED"),
+            Self::Declined => f.write_str("DECLINED"),
+            Self::Tentative => f.write_str("TENTATIVE"),
+            Self::Delegated => f.write_str("DELEGATED"),
+            Self::X(t) | Self::Iana(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for PartStatTodo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NeedsAction => f.write_str("NEEDS-ACTION"),
+            Self::Accepted => f.write_str("ACCEPTED"),
+            Self::Declined => f.write_str("DECLINED"),
+            Self::Tentative => f.write_str("TENTATIVE"),
+            Self::Delegated => f.write_str("DELEGATED"),
+            Self::Completed => f.write_str("COMPLETED"),
+            Self::InProcess => f.write_str("IN-PROCESS"),
+            Self::X(t) | Self::Iana(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for PartStatJournal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NeedsAction => f.write_str("NEEDS-ACTION"),
+            Self::Accepted => f.write_str("ACCEPTED"),
+            Self::Declined => f.write_str("DECLINED"),
+            Self::X(t) | Self::Iana(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for RelationshipType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Parent => f.write_str("PARENT"),
+            Self::Child => f.write_str("CHILD"),
+            Self::Sibling => f.write_str("SIBLING"),
+            Self::X(t) | Self::Iana(t) => f.write_str(t.as_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for AlarmTriggerRelationship {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Start => "START",
+            Self::End => "END",
+        })
+    }
+}
+
+impl std::fmt::Display for RecurrenceIdentifierRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::ThisAndFuture => "THISANDFUTURE",
+        })
+    }
+}
+
 /// Convenience alias for the parsed param vector
 pub type Params = Vec<PropertyParams>;
 
