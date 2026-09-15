@@ -155,15 +155,9 @@ mod tests {
         let calendar = Calendar::parse(src).unwrap();
         assert_eq!(
             calendar.to_string(),
-            "BEGIN:VCALENDAR\r\n\
-             PRODID:-//example//EN\r\n\
-             VERSION:2.0\r\n\
-             BEGIN:VEVENT\r\n\
-             DTSTAMP:19970901T130000Z\r\n\
-             UID:123@example.com\r\n\
-             DTSTART:19970903T163000Z\r\n\
-             END:VEVENT\r\n\
-             END:VCALENDAR\r\n"
+            "BEGIN:VCALENDAR\r\nPRODID:-//example//EN\r\nVERSION:2.0\r\nBEGIN:\
+             VEVENT\r\nDTSTAMP:19970901T130000Z\r\nUID:123@example.com\r\\
+             nDTSTART:19970903T163000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
         );
     }
 
@@ -179,8 +173,12 @@ mod tests {
         let original = Calendar::parse(src).unwrap();
         let rendered = original.to_string();
 
-        let reparsed = Calendar::parse(rendered.as_bytes())
-            .unwrap_or_else(|e| panic!("rendered output failed to reparse: {e}\n---\n{rendered}"));
+        let reparsed =
+            Calendar::parse(rendered.as_bytes()).unwrap_or_else(|e| {
+                panic!(
+                    "rendered output failed to reparse: {e}\n---\n{rendered}"
+                )
+            });
 
         assert_eq!(reparsed.components().len(), 1);
         let Component::Todo(todo) = &reparsed.components()[0] else {
@@ -211,8 +209,12 @@ mod tests {
         let original = Calendar::parse(src).unwrap();
         let rendered = original.to_string();
 
-        let reparsed = Calendar::parse(rendered.as_bytes())
-            .unwrap_or_else(|e| panic!("rendered output failed to reparse: {e}\n---\n{rendered}"));
+        let reparsed =
+            Calendar::parse(rendered.as_bytes()).unwrap_or_else(|e| {
+                panic!(
+                    "rendered output failed to reparse: {e}\n---\n{rendered}"
+                )
+            });
 
         assert_eq!(reparsed.components().len(), 2);
         let Component::Timezone(tz) = &reparsed.components()[0] else {

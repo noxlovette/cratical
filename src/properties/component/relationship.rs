@@ -614,7 +614,8 @@ mod tests {
         .unwrap();
         assert_eq!(
             attendee.to_string(),
-            "ATTENDEE;PARTSTAT=ACCEPTED;CN=Jane Doe;ROLE=REQ-PARTICIPANT:mailto:jdoe@example.com"
+            "ATTENDEE;PARTSTAT=ACCEPTED;CN=Jane \
+             Doe;ROLE=REQ-PARTICIPANT:mailto:jdoe@example.com"
         );
     }
 

@@ -1,5 +1,3 @@
-use memchr::memchr;
-
 use crate::{properties::SharedParams, values::Text};
 
 /// This property defines the calendar scale used for the calendar information

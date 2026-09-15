@@ -1,9 +1,9 @@
 use crate::{
     components::write_lines,
     properties::{
-        Comment, DateTimeStart, Iana, LastModified, RRule,
-        RecurrenceDateTimes, TimeZoneIdentifier, TimeZoneName,
-        TimeZoneOffsetFrom, TimeZoneOffsetTo, TimeZoneUrl, Xprop,
+        Comment, DateTimeStart, Iana, LastModified, RRule, RecurrenceDateTimes,
+        TimeZoneIdentifier, TimeZoneName, TimeZoneOffsetFrom, TimeZoneOffsetTo,
+        TimeZoneUrl, Xprop,
     },
 };
 

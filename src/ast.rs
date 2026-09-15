@@ -30,11 +30,6 @@ pub(crate) fn split_once(b: &[u8], needle: u8) -> Option<(&[u8], &[u8])> {
         .map(|pos| (&b[..pos], &b[pos + 1..]))
 }
 
-/// [Case-insensitively](https://datatracker.ietf.org/doc/html/rfc5545#section-3.5) matches the name to a given pattern
-pub(crate) fn match_name(b: &[u8], pat: &[u8]) -> bool {
-    b.to_ascii_uppercase() == pat
-}
-
 /// Finds the byte offset of the first unquoted occurrence of `needle` in
 /// `b`. A `needle` byte between two DQUOTE (`"`) characters doesn't count,
 /// since content lines and parameter values MAY contain the character
@@ -87,7 +82,7 @@ pub(crate) fn split_unescaped(bytes: &[u8], needle: u8) -> Vec<&[u8]> {
 /// quotes stripped. `None` if it isn't quoted — error-agnostic, see
 /// [`split_once`].
 pub(crate) fn strip_quoted_string(v: &[u8]) -> Option<&[u8]> {
-    let needle = &[b'"'];
+    let needle = b"\"";
 
     v.strip_prefix(needle).and_then(|s| s.strip_suffix(needle))
 }
@@ -100,9 +95,9 @@ pub(crate) fn strip_quoted_string(v: &[u8]) -> Option<&[u8]> {
 /// and `^^` to a literal `^`. A `^` followed by anything else is not a
 /// defined sequence, so per RFC 6868 Section 3.2 ("the character sequence
 /// should be left as it is") both bytes are left untouched. Operates on the
-/// already-`;`/`=`-split parameter value (i.e. after [`crate::properties::param_value`]
-/// has isolated it), not on the raw content line — a `^` has no special
-/// meaning outside a parameter value.
+/// already-`;`/`=`-split parameter value (i.e. after
+/// [`crate::properties::param_value`] has isolated it), not on the raw content
+/// line — a `^` has no special meaning outside a parameter value.
 pub(crate) fn decode_caret(bytes: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(bytes.len());
     let mut iter = bytes.iter().copied().peekable();

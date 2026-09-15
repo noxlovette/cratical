@@ -105,7 +105,11 @@ impl Xprop {
         let params = SharedParams::try_from(&remainder[..colon])?;
         let value = Text::try_from(&remainder[colon + 1..])?;
         let name = Text::try_from(name)?;
-        Ok(Self { name, value, params })
+        Ok(Self {
+            name,
+            value,
+            params,
+        })
     }
 }
 
@@ -129,7 +133,11 @@ impl Iana {
         let params = SharedParams::try_from(&remainder[..colon])?;
         let value = Text::try_from(&remainder[colon + 1..])?;
         let name = Text::try_from(name)?;
-        Ok(Self { name, value, params })
+        Ok(Self {
+            name,
+            value,
+            params,
+        })
     }
 }
 
@@ -460,8 +468,7 @@ mod tests {
     #[test]
     fn xprop_display_round_trips_the_content_line() {
         let xprop =
-            Xprop::parse(b"X-WR-CALNAME", b":My Calendar".as_slice())
-                .unwrap();
+            Xprop::parse(b"X-WR-CALNAME", b":My Calendar".as_slice()).unwrap();
         assert_eq!(xprop.to_string(), "X-WR-CALNAME:My Calendar");
     }
 
@@ -530,17 +537,14 @@ mod tests {
         // decoding (RFC 5545 §3.3.11) — the escaped `;`/`,` must be decoded,
         // not mistaken for real param/value-list delimiters.
         let text =
-            Iana::parse(b"IMAGE", br";VALUE=TEXT:a\;b\,c".as_slice())
-                .unwrap();
+            Iana::parse(b"IMAGE", br";VALUE=TEXT:a\;b\,c".as_slice()).unwrap();
         assert_eq!(text.params.iana[0].as_str(), "VALUE=TEXT");
         assert_eq!(text.value.as_str(), "a;b,c");
 
         // No recognized VALUE param at all — still falls back cleanly.
-        let unknown = Iana::parse(
-            b"IMAGE",
-            b":https://example.com/b.png".as_slice(),
-        )
-        .unwrap();
+        let unknown =
+            Iana::parse(b"IMAGE", b":https://example.com/b.png".as_slice())
+                .unwrap();
         assert!(unknown.params.iana.is_empty());
         assert_eq!(unknown.value.as_str(), "https://example.com/b.png");
     }
@@ -565,7 +569,8 @@ mod tests {
         // each of these across two physical lines is removed, with no space
         // inserted, before Property::parse ever sees it — see
         // `ast::lexer::unfold`, exercised end-to-end for a different
-        // fixture in `link_falls_back_to_iana_and_unfolds_across_rfc_9253_examples`
+        // fixture in
+        // `link_falls_back_to_iana_and_unfolds_across_rfc_9253_examples`
         // below). CONFERENCE (RFC 7986 §5.11) has no PROPERTY_DISPATCH
         // entry either.
         let moderator = Iana::parse(
@@ -613,7 +618,8 @@ mod tests {
         // hand-unfolded stand-in.
         let calendar = crate::Calendar::parse(include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/tests/fixtures/collective-icalendar/calendars/rfc_9253_examples.ics"
+            "/tests/fixtures/collective-icalendar/calendars/rfc_9253_examples.\
+             ics"
         )))
         .unwrap();
         let components = calendar.components();

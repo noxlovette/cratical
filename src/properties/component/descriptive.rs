@@ -794,8 +794,8 @@ mod tests {
 
     #[test]
     fn summary_display_round_trips_the_content_line() {
-        let summary = Summary::try_from(b":Department Party".as_slice())
-            .unwrap();
+        let summary =
+            Summary::try_from(b":Department Party".as_slice()).unwrap();
         assert_eq!(summary.to_string(), "SUMMARY:Department Party");
     }
 
@@ -813,8 +813,7 @@ mod tests {
 
     #[test]
     fn geo_display_round_trips_the_lat_lon_pair() {
-        let geo = Geo::try_from(b":37.386013;-122.082932".as_slice())
-            .unwrap();
+        let geo = Geo::try_from(b":37.386013;-122.082932".as_slice()).unwrap();
         assert_eq!(geo.to_string(), "GEO:37.386013;-122.082932");
     }
 }

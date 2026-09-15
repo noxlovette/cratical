@@ -265,19 +265,6 @@ impl Parser {
         Ok(builder)
     }
 
-    /// checks if the next token corresponds to one of passed token types
-    ///
-    /// moves on if matches
-    fn match_tokens(&mut self, types: &[TokenType]) -> ParseResult<bool> {
-        for t in types {
-            if self.check(*t)? {
-                self.next()?;
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
     /// returns true if the next token corresponds to the one passed to the
     /// function. false if we have reached the end of the vector
     fn check(&mut self, t: TokenType) -> ParseResult<bool> {
@@ -368,7 +355,7 @@ pub enum ParseError {
 
     /// Encoding error
     #[error(transparent)]
-    UTF(#[from] Utf8Error),
+    Utf(#[from] Utf8Error),
 
     #[error("Unexpected EOF")]
     UnexpectedEof,

@@ -49,7 +49,8 @@ const MALFORMED_FIXTURES: &[&str] = &[
     "collective-icalendar/calendars/fuzz_testcase_0_char_in_component_name.ics",
     "collective-icalendar/calendars/fuzz_testcase_invalid_month.ics",
     "collective-icalendar/calendars/fuzz_testcase_vtimezone_lone_cr.ics",
-    "collective-icalendar/calendars/issue_351_whitespace_in_property_and_params.ics",
+    "collective-icalendar/calendars/\
+     issue_351_whitespace_in_property_and_params.ics",
 ];
 
 /// Files covering RFC 7953 (`VAVAILABILITY`)/RFC 9073 (`VLOCATION`)/RFC 9074

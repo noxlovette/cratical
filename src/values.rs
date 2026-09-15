@@ -16,7 +16,8 @@ pub use recurrence::Recur;
 use std::{ops::Deref, str::from_utf8};
 use thiserror::Error;
 use url::Url;
-/// Date/time formatting constants and the [`datetime::DateTimeExt`] helper trait.
+/// Date/time formatting constants and the [`datetime::DateTimeExt`] helper
+/// trait.
 pub mod datetime;
 /// The RFC 5545's helper
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -896,9 +897,6 @@ mod recurrence {
     #[derive(Debug, Clone)]
     struct WeekNum(i8);
 
-    /// 1 to 53, Ordinal of the week
-    #[derive(Debug)]
-    struct OrdWk(u8);
     #[derive(Debug, Clone)]
     struct WeekdayNum {
         ordinal: Option<i8>,
@@ -907,14 +905,8 @@ mod recurrence {
     /// 1 to 12
     #[derive(Debug, Clone)]
     struct MonthNum(u8);
-    /// 1 to 31, Ordinal of month day
-    #[derive(Debug)]
-    struct OrdMoDay(u8);
     #[derive(Debug, Clone)]
     struct MonthDayNum(i8);
-    /// 1 to 366
-    #[derive(Debug)]
-    struct OrdYrDay(u16);
     #[derive(Debug, Clone)]
     struct YearDayNum(i16);
     type SetPosDay = YearDayNum;
@@ -1658,7 +1650,8 @@ impl TryFrom<&[u8]> for Boolean {
     }
 }
 
-/// An error parsing a raw property value into one of this crate's typed value representations.
+/// An error parsing a raw property value into one of this crate's typed value
+/// representations.
 #[derive(Debug, Error)]
 pub enum ValueError {
     /// [CalendarUserAddress] Parsing Error
@@ -2176,8 +2169,8 @@ mod tests {
 
     #[test]
     fn text_display_escapes_backslash_semicolon_comma_and_newline() {
-        let text = Text::try_from(b"a\\\\b,c\\;d\\,e\\nf\\Ng".as_slice())
-            .unwrap();
+        let text =
+            Text::try_from(b"a\\\\b,c\\;d\\,e\\nf\\Ng".as_slice()).unwrap();
         assert_eq!(text.to_string(), "a\\\\b\\,c\\;d\\,e\\nf\\ng");
     }
 
