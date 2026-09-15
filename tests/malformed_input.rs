@@ -210,3 +210,23 @@ fn lone_cr_inside_vtimezone_is_a_lexer_error() {
         Err(CalendarParseError::Lexer(_))
     ));
 }
+
+/// `REFRESH - INTERVAL; VALUE = DURATION:PT48H` — stray spaces around the
+/// hyphen in the property name and around the param `=` (issue #8, gap 7).
+/// The lexer's `name_chars()` only consumes `ALPHA`/`DIGIT`/`-`, so it stops
+/// at the first space: the token name is just `REFRESH`, leaving
+/// `" - INTERVAL; VALUE = DURATION:PT48H"` as the raw remainder handed to
+/// the `Iana` fallback (`REFRESH` isn't `X-`-prefixed and has no
+/// `PROPERTY_DISPATCH` entry). That remainder's first param segment,
+/// `" - INTERVAL"`, has no `=`, so it fails at `SharedParams` parsing
+/// rather than silently truncating to a bare `REFRESH` property or
+/// stitching `INTERVAL` back on — this producer's whitespace quirk is
+/// rejected outright, not tolerated.
+#[test]
+fn whitespace_around_property_and_param_names_is_a_parse_error() {
+    let bytes = fixture("issue_351_whitespace_in_property_and_params.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}

@@ -377,4 +377,177 @@ mod tests {
         assert_eq!(params.iana[0].as_str(), "NEWLINE=\n");
         assert_eq!(params.iana[1].as_str(), "ALL=^\"\n");
     }
+
+    #[test]
+    fn image_falls_back_to_iana_across_uri_and_binary_value_forms() {
+        // collective-icalendar/calendars/rfc_7986_image.ics — IMAGE (RFC
+        // 7986 §5.10) has no PROPERTY_DISPATCH entry, so it must round-trip
+        // through the Iana fallback rather than erroring or truncating,
+        // across both the VALUE=URI and VALUE=BINARY (base64) forms.
+        let uri = Iana::try_from(
+            b";VALUE=URI;DISPLAY=BADGE;FMTTYPE=image/png:http://example.com/images/party.png"
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(uri.params.iana[0].as_str(), "VALUE=URI");
+        assert_eq!(uri.params.iana[1].as_str(), "DISPLAY=BADGE");
+        assert_eq!(uri.params.iana[2].as_str(), "FMTTYPE=image/png");
+        assert_eq!(uri.value.as_str(), "http://example.com/images/party.png");
+
+        let binary = Iana::try_from(
+            b";ENCODING=BASE64;VALUE=BINARY;FMTTYPE=image/png:iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAAnAAAAJwEqCZFPAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAA1JREFUCJlj+P//PwMACPwC/oXNqzQAAAAASUVORK5CYII="
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(binary.params.iana[0].as_str(), "ENCODING=BASE64");
+        assert_eq!(binary.params.iana[1].as_str(), "VALUE=BINARY");
+        assert_eq!(binary.params.iana[2].as_str(), "FMTTYPE=image/png");
+        assert!(binary.value.as_str().starts_with("iVBORw0KGgo"));
+    }
+
+    #[test]
+    fn image_falls_back_to_iana_across_uri_binary_text_and_unknown_forms() {
+        // collective-icalendar/calendars/issue_1561_image_value.ics
+        let uri =
+            Iana::try_from(b";VALUE=URI:https://example.com/a.png".as_slice())
+                .unwrap();
+        assert_eq!(uri.params.iana[0].as_str(), "VALUE=URI");
+        assert_eq!(uri.value.as_str(), "https://example.com/a.png");
+
+        let binary =
+            Iana::try_from(b";ENCODING=BASE64;VALUE=BINARY:AP+A".as_slice())
+                .unwrap();
+        assert_eq!(binary.params.iana[0].as_str(), "ENCODING=BASE64");
+        assert_eq!(binary.params.iana[1].as_str(), "VALUE=BINARY");
+        assert_eq!(binary.value.as_str(), "AP+A");
+
+        // VALUE=TEXT round-trips through Text's own BACKSLASH-escape
+        // decoding (RFC 5545 §3.3.11) — the escaped `;`/`,` must be decoded,
+        // not mistaken for real param/value-list delimiters.
+        let text =
+            Iana::try_from(br";VALUE=TEXT:a\;b\,c".as_slice()).unwrap();
+        assert_eq!(text.params.iana[0].as_str(), "VALUE=TEXT");
+        assert_eq!(text.value.as_str(), "a;b,c");
+
+        // No recognized VALUE param at all — still falls back cleanly.
+        let unknown =
+            Iana::try_from(b":https://example.com/b.png".as_slice())
+                .unwrap();
+        assert!(unknown.params.iana.is_empty());
+        assert_eq!(unknown.value.as_str(), "https://example.com/b.png");
+    }
+
+    #[test]
+    fn conference_falls_back_to_iana_with_folded_multi_value_feature_param() {
+        // collective-icalendar/calendars/rfc_7986_conferences.ics, unfolded
+        // per RFC 5545 §3.1 (the CRLF/LF + single leading SPACE that splits
+        // each of these across two physical lines is removed, with no space
+        // inserted, before Property::parse ever sees it — see
+        // `ast::lexer::unfold`, exercised end-to-end for a different
+        // fixture in `link_falls_back_to_iana_and_unfolds_across_rfc_9253_examples`
+        // below). CONFERENCE (RFC 7986 §5.11) has no PROPERTY_DISPATCH
+        // entry either.
+        let moderator = Iana::try_from(
+            b";VALUE=URI;FEATURE=PHONE,MODERATOR;LABEL=Moderator dial-in:tel:+1-412-555-0123,,,654321"
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(moderator.params.iana[0].as_str(), "VALUE=URI");
+        // FEATURE's comma-separated multi-value list is preserved verbatim
+        // as one passthrough param text, not comma-split into typed values
+        // (only list-*valued properties* get that treatment, not params).
+        assert_eq!(
+            moderator.params.iana[1].as_str(),
+            "FEATURE=PHONE,MODERATOR"
+        );
+        assert_eq!(
+            moderator.params.iana[2].as_str(),
+            "LABEL=Moderator dial-in"
+        );
+        assert_eq!(
+            moderator.value.as_str(),
+            "tel:+1-412-555-0123,,,654321"
+        );
+
+        let video = Iana::try_from(
+            b";VALUE=URI;FEATURE=AUDIO,VIDEO;LABEL=Attendee dial-in:https://chat.example.com/audio?id=123456"
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(video.params.iana[1].as_str(), "FEATURE=AUDIO,VIDEO");
+        assert_eq!(
+            video.value.as_str(),
+            "https://chat.example.com/audio?id=123456"
+        );
+    }
+
+    #[test]
+    fn link_falls_back_to_iana_and_unfolds_across_rfc_9253_examples() {
+        // collective-icalendar/calendars/rfc_9253_examples.ics — LINK (RFC
+        // 9253 §8) has no PROPERTY_DISPATCH entry either, and unlike the
+        // IMAGE/CONFERENCE tests above, this one goes through the real
+        // `Calendar::parse` pipeline (real lexer, real unfolding) rather
+        // than hand-assembled bytes, since this fixture's LINK values are
+        // folded across up to four physical lines — worth confirming the
+        // fallback survives real multi-fold reconstruction, not just a
+        // hand-unfolded stand-in.
+        let calendar = crate::Calendar::parse(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/collective-icalendar/calendars/rfc_9253_examples.ics"
+        )))
+        .unwrap();
+        let components = calendar.components();
+        assert_eq!(components.len(), 2);
+
+        let crate::Component::Event(links) = &components[0] else {
+            panic!("expected first component to be a VEVENT");
+        };
+        assert_eq!(links.uid.as_str(), "links-rfc-9253-section-8.2");
+        assert_eq!(links.iana.len(), 3);
+
+        assert_eq!(links.iana[0].params.iana[0].as_str(), "LINKREL=SOURCE");
+        assert_eq!(links.iana[0].params.iana[1].as_str(), "LABEL=Venue");
+        assert_eq!(links.iana[0].params.iana[2].as_str(), "VALUE=URI");
+        assert_eq!(links.iana[0].value.as_str(), "https://example.com/events");
+
+        assert_eq!(
+            links.iana[1].params.iana[0].as_str(),
+            r#"LINKREL="https://example.com/linkrel/derivedFrom""#
+        );
+        assert_eq!(links.iana[1].params.iana[1].as_str(), "VALUE=URI");
+        assert_eq!(
+            links.iana[1].value.as_str(),
+            "https://example.com/tasks/01234567-abcd1234.ics"
+        );
+
+        // Spans 4 physical (folded) lines end to end — confirms multi-fold
+        // reconstruction, not just a single fold.
+        assert_eq!(
+            links.iana[2].params.iana[0].as_str(),
+            r#"LINKREL="https://example.com/linkrel/costStructure""#
+        );
+        assert_eq!(
+            links.iana[2].params.iana[1].as_str(),
+            "VALUE=XML-REFERENCE"
+        );
+        assert_eq!(
+            links.iana[2].value.as_str(),
+            "https://example.com/xmlDocs/bidFramework.xml#xpointer(descendant::CostStruc/range-to(following::CostStrucEND[1]))"
+        );
+
+        let crate::Component::Event(reference) = &components[1] else {
+            panic!("expected second component to be a VEVENT");
+        };
+        assert_eq!(reference.uid.as_str(), "links-rfc-9253-uid");
+        assert_eq!(reference.iana.len(), 1);
+        assert_eq!(
+            reference.iana[0].params.iana[0].as_str(),
+            "LINKREL=REFERENCE"
+        );
+        assert_eq!(reference.iana[0].params.iana[1].as_str(), "VALUE=UID");
+        assert_eq!(
+            reference.iana[0].value.as_str(),
+            "links-rfc-9253-section-8.2"
+        );
+    }
 }

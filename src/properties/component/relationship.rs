@@ -316,4 +316,75 @@ mod tests {
             r#"CommonName(Text("Jane Doe"))"#
         );
     }
+
+    #[test]
+    fn related_to_reltype_falls_back_to_iana_for_rfc_9253_values() {
+        // collective-icalendar/calendars/rfc_9253_related_to.ics, unfolded
+        // per RFC 5545 §3.1 — RFC 9253 §5.1 adds RELTYPE values
+        // (STARTTOSTART/STARTTOFINISH/etc.) that RelationshipType doesn't
+        // model as a dedicated variant, so they must round-trip through its
+        // own X/Iana fallback arm rather than erroring.
+        let plain = RelatedTo::try_from(
+            b":jsmith.part7.19960817T083000.xyzMail@example.com".as_slice(),
+        )
+        .unwrap();
+        assert!(plain.params.rt.is_none());
+        assert_eq!(
+            plain.value.as_str(),
+            "jsmith.part7.19960817T083000.xyzMail@example.com"
+        );
+
+        let by_uid = RelatedTo::try_from(
+            b";VALUE=UID:19960401-080045-4000F192713-0052@example.com"
+                .as_slice(),
+        )
+        .unwrap();
+        // VALUE isn't modeled by RelatedToParams either (only RELTYPE is) —
+        // it falls to the same shared passthrough bucket as any other
+        // unrecognized param.
+        assert!(by_uid.params.rt.is_none());
+        assert_eq!(by_uid.params.shared.iana[0].as_str(), "VALUE=UID");
+        assert_eq!(
+            by_uid.value.as_str(),
+            "19960401-080045-4000F192713-0052@example.com"
+        );
+
+        let start_to_finish = RelatedTo::try_from(
+            b";VALUE=URI;RELTYPE=STARTTOFINISH:https://example.com/caldav/user/jb/cal/19960401-080045-4000F192713.ics"
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{:?}", start_to_finish.params.rt),
+            r#"Some(Iana(Text("STARTTOFINISH")))"#
+        );
+        assert_eq!(
+            start_to_finish.params.shared.iana[0].as_str(),
+            "VALUE=URI"
+        );
+        assert_eq!(
+            start_to_finish.value.as_str(),
+            "https://example.com/caldav/user/jb/cal/19960401-080045-4000F192713.ics"
+        );
+    }
+
+    #[test]
+    fn related_to_gap_param_falls_back_to_shared_passthrough() {
+        // collective-icalendar/calendars/rfc_9253_gap.ics — RFC 9253 §6's
+        // GAP parameter isn't a recognized RelatedTo param name at all, so
+        // it must land in SharedParams's x-param/iana passthrough bucket
+        // rather than erroring, alongside RELTYPE=STARTTOSTART falling back
+        // the same way as the sibling test above.
+        let related = RelatedTo::try_from(
+            b";VALUE=UID;RELTYPE=STARTTOSTART;GAP=P1W:1".as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            format!("{:?}", related.params.rt),
+            r#"Some(Iana(Text("STARTTOSTART")))"#
+        );
+        assert_eq!(related.params.shared.iana[0].as_str(), "VALUE=UID");
+        assert_eq!(related.params.shared.iana[1].as_str(), "GAP=P1W");
+        assert_eq!(related.value.as_str(), "1");
+    }
 }
