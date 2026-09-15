@@ -1,11 +1,16 @@
 use crate::{
     Pair,
-    params::{Encoding, Fmttype, Language, ValueDataType},
+    params::{
+        Altrep, Encoding, Feature, Fmttype, ImageDisplay, Label, Language,
+        ValueDataType,
+    },
     properties::{
         AltrepLanguageParams, ParameterError, PropertyError, SharedParams,
         param_name, param_segments, param_value,
     },
-    values::{Binary, Float, Integer, Text, Uri, ValueError},
+    values::{
+        Binary, Duration as DurationV, Float, Integer, Text, Uri, ValueError,
+    },
 };
 
 /// This property is used in "VEVENT", "VTODO", and "VJOURNAL" calendar
@@ -625,6 +630,297 @@ impl_try_from_bytes!(Summary, Text, AltrepLanguageParams);
 impl std::fmt::Display for Summary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "SUMMARY{}:{}", self.params, self.value)
+    }
+}
+
+/// This property specifies a color used for displaying the calendar,
+/// event, to-do, or journal data.
+///
+/// This is a new property defined by \[RFC7986\], which updates RFC 5545 —
+/// this crate treats it, and the rest of RFC 7986's new properties, as core
+/// (always available, not behind a feature flag; see the crate-level docs).
+/// It can be specified once in a `VCALENDAR` object, or once in a
+/// `VEVENT`/`VTODO`/`VJOURNAL` component. The value SHOULD be one of the
+/// CSS3 extended color keyword names, but this crate stores it as opaque
+/// text rather than validating it against that list.
+///
+/// Example:
+///
+/// > COLOR:turquoise
+///
+/// [Section 5.9](https://datatracker.ietf.org/doc/html/rfc7986#section-5.9)
+#[derive(Debug)]
+pub struct Color {
+    value: Text,
+    params: SharedParams,
+}
+
+impl_try_from_bytes!(Color);
+
+impl std::fmt::Display for Color {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "COLOR{}:{}", self.params, self.value)
+    }
+}
+
+/// This property specifies an image associated with the calendar or a
+/// calendar component. The value MUST be data with a media type of
+/// "image" or refer to such data.
+///
+/// A new property defined by \[RFC7986\] (core in this crate — see the
+/// crate-level docs). It can be specified multiple times in a `VCALENDAR`
+/// object or in `VEVENT`/`VTODO`/`VJOURNAL` components — calendar
+/// applications SHOULD select one to display (e.g. by resolution or
+/// format) rather than showing all of them. The `DISPLAY` parameter
+/// suggests how it's meant to be presented; `ALTREP` may point at a
+/// clickable target for it.
+///
+/// Example:
+///
+/// > IMAGE;VALUE=URI;DISPLAY=BADGE;FMTTYPE=image/png:http://example.com/images/party.png
+///
+/// [Section 5.10](https://datatracker.ietf.org/doc/html/rfc7986#section-5.10)
+#[derive(Debug)]
+pub struct Image {
+    value: AttachmentValue,
+    params: ImageParams,
+}
+
+impl TryFrom<&[u8]> for Image {
+    type Error = crate::ast::parser::ParseError;
+
+    fn try_from(v: &[u8]) -> Result<Self, Self::Error> {
+        let colon = crate::properties::value_start(v)?;
+        let params = ImageParams::try_from(&v[..colon])?;
+        let value = AttachmentValue::try_from(&v[colon + 1..])?;
+
+        // Same URI/BINARY-vs-ENCODING/VALUE cross-check as ATTACH (see
+        // that type's own `TryFrom`) — IMAGE reuses its value shape
+        // wholesale.
+        let declared_binary = matches!(params.encoding, Some(Encoding::Base64))
+            || matches!(params.value_data_type, Some(ValueDataType::Binary));
+        let declared_uri =
+            matches!(params.value_data_type, Some(ValueDataType::Uri));
+        let mismatch = match &value {
+            AttachmentValue::Uri(_) => declared_binary,
+            AttachmentValue::Binary(_) => declared_uri,
+        };
+        if mismatch {
+            return Err(ValueError::Malformed {
+                expected: "IMAGE value shape consistent with its \
+                           ENCODING/VALUE params"
+                    .into(),
+                received: std::str::from_utf8(&v[colon + 1..])
+                    .ok()
+                    .map(Into::into),
+            }
+            .into());
+        }
+
+        Ok(Self { value, params })
+    }
+}
+
+impl std::fmt::Display for Image {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "IMAGE{}:{}", self.params, self.value)
+    }
+}
+
+#[derive(Default, Debug)]
+struct ImageParams {
+    shared: SharedParams,
+    encoding: Option<Encoding>,
+    value_data_type: Option<ValueDataType>,
+    fmttype: Option<Fmttype>,
+    altrep: Option<Altrep>,
+    display: Option<ImageDisplay>,
+}
+
+impl TryFrom<&[u8]> for ImageParams {
+    type Error = ParameterError;
+
+    fn try_from(v: &[u8]) -> Result<Self, Self::Error> {
+        let mut params = Self::default();
+        for segment in param_segments(v) {
+            match param_name(segment)?.to_ascii_uppercase().as_slice() {
+                b"ENCODING" => {
+                    params.encoding =
+                        Some(param_value(segment)?.as_slice().try_into()?)
+                }
+                b"VALUE" => {
+                    params.value_data_type =
+                        Some(param_value(segment)?.as_slice().try_into()?)
+                }
+                b"FMTTYPE" => {
+                    params.fmttype =
+                        Some(param_value(segment)?.as_slice().try_into()?)
+                }
+                b"ALTREP" => {
+                    params.altrep =
+                        Some(param_value(segment)?.as_slice().try_into()?)
+                }
+                b"DISPLAY" => {
+                    params.display =
+                        Some(param_value(segment)?.as_slice().try_into()?)
+                }
+                _ => params.shared.absorb(segment)?,
+            }
+        }
+        Ok(params)
+    }
+}
+
+impl std::fmt::Display for ImageParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.encoding {
+            write!(f, ";ENCODING={v}")?;
+        }
+        if let Some(v) = &self.value_data_type {
+            write!(f, ";VALUE={v}")?;
+        }
+        if let Some(v) = &self.fmttype {
+            write!(f, ";FMTTYPE={v}")?;
+        }
+        if let Some(v) = &self.altrep {
+            write!(f, ";ALTREP={v}")?;
+        }
+        if let Some(v) = &self.display {
+            write!(f, ";DISPLAY={v}")?;
+        }
+        write!(f, "{}", self.shared)
+    }
+}
+
+/// This property specifies information for accessing a conferencing
+/// system, e.g. a dial-in number or a video call URI.
+///
+/// A new property defined by \[RFC7986\] (core in this crate — see the
+/// crate-level docs). It can be specified multiple times in `VEVENT` or
+/// `VTODO` components, one per access method (phone, video, chat, ...).
+/// The `FEATURE` parameter describes what kind of access the URI provides;
+/// `LABEL` gives a human-readable description of it.
+///
+/// Example:
+///
+/// > CONFERENCE;VALUE=URI;FEATURE=PHONE,MODERATOR;LABEL=Moderator
+/// > dial-in:tel:+1-412-555-0123,,,654321
+///
+/// [Section 5.11](https://datatracker.ietf.org/doc/html/rfc7986#section-5.11)
+#[derive(Debug)]
+pub struct Conference {
+    value: Uri,
+    params: ConferenceParams,
+}
+
+impl_try_from_bytes!(Conference, Uri, ConferenceParams);
+
+impl std::fmt::Display for Conference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CONFERENCE{}:{}", self.params, self.value)
+    }
+}
+
+#[derive(Default, Debug)]
+struct ConferenceParams {
+    shared: SharedParams,
+    feature: Option<Feature>,
+    label: Option<Label>,
+    language: Option<Language>,
+}
+
+impl TryFrom<&[u8]> for ConferenceParams {
+    type Error = ParameterError;
+
+    fn try_from(v: &[u8]) -> Result<Self, Self::Error> {
+        let mut params = Self::default();
+        for segment in param_segments(v) {
+            match param_name(segment)?.to_ascii_uppercase().as_slice() {
+                b"FEATURE" => {
+                    params.feature =
+                        Some(param_value(segment)?.as_slice().try_into()?)
+                }
+                b"LABEL" => {
+                    params.label =
+                        Some(param_value(segment)?.as_slice().try_into()?)
+                }
+                b"LANGUAGE" => {
+                    params.language =
+                        Some(param_value(segment)?.as_slice().try_into()?)
+                }
+                _ => params.shared.absorb(segment)?,
+            }
+        }
+        Ok(params)
+    }
+}
+
+impl std::fmt::Display for ConferenceParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(v) = &self.feature {
+            write!(f, ";FEATURE={v}")?;
+        }
+        if let Some(v) = &self.label {
+            write!(f, ";LABEL={v}")?;
+        }
+        if let Some(v) = &self.language {
+            write!(f, ";LANGUAGE={v}")?;
+        }
+        write!(f, "{}", self.shared)
+    }
+}
+
+/// This property specifies a suggested minimum interval for polling for
+/// changes of the calendar data from the original source of that data.
+///
+/// A new property defined by \[RFC7986\] (core in this crate — see the
+/// crate-level docs). It can be specified once in a `VCALENDAR` object.
+/// RFC 7986's own grammar requires a `VALUE=DURATION` parameter on every
+/// instance of this property; this crate doesn't enforce that on parse
+/// (the value's own `dur-value` syntax is unambiguous without it) but
+/// still accepts it as any other parameter would be.
+///
+/// Example:
+///
+/// > REFRESH-INTERVAL;VALUE=DURATION:PT1H
+///
+/// [Section 5.7](https://datatracker.ietf.org/doc/html/rfc7986#section-5.7)
+#[derive(Debug)]
+pub struct RefreshInterval {
+    value: DurationV,
+    params: SharedParams,
+}
+
+impl_try_from_bytes!(RefreshInterval, DurationV);
+
+impl std::fmt::Display for RefreshInterval {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "REFRESH-INTERVAL{}:{}", self.params, self.value)
+    }
+}
+
+/// This property identifies a source URI where calendar data can be
+/// refreshed from, e.g. by a `REFRESH-INTERVAL`-driven poll.
+///
+/// A new property defined by \[RFC7986\] (core in this crate — see the
+/// crate-level docs). It can be specified once in a `VCALENDAR` object.
+///
+/// Example:
+///
+/// > SOURCE:https://example.com/holidays.ics
+///
+/// [Section 5.8](https://datatracker.ietf.org/doc/html/rfc7986#section-5.8)
+#[derive(Debug)]
+pub struct Source {
+    value: Uri,
+    params: SharedParams,
+}
+
+impl_try_from_bytes!(Source, Uri);
+
+impl std::fmt::Display for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SOURCE{}:{}", self.params, self.value)
     }
 }
 

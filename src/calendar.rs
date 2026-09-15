@@ -10,7 +10,9 @@ use crate::{
         timezone::Timezone, todo::Todo, unknown::UnknownComponent, write_lines,
     },
     properties::{
-        CalendarScale, Iana, Method, ProductIdentifier, Version, Xprop,
+        CalendarScale, Categories, Color, Description, Iana, Image,
+        LastModified, Method, Name, ProductIdentifier, RefreshInterval, Source,
+        Uid, UniformResourceLocator, Version, Xprop,
     },
 };
 
@@ -50,6 +52,20 @@ pub struct Calendar {
     pub(crate) version: Version,
     pub(crate) calscale: Option<CalendarScale>,
     pub(crate) method: Option<Method>,
+    // RFC 7986 §5 new/extended `VCALENDAR`-level properties. RFC 7986
+    // updates RFC 5545 itself (unlike RFC 7953/9074's distinct new
+    // components/extensions), so this crate treats it as core: always
+    // compiled in, no feature flag.
+    pub(crate) uid: Option<Uid>,
+    pub(crate) last_mod: Option<LastModified>,
+    pub(crate) url: Option<UniformResourceLocator>,
+    pub(crate) refresh_interval: Option<RefreshInterval>,
+    pub(crate) source: Option<Source>,
+    pub(crate) color: Option<Color>,
+    pub(crate) name: Vec<Name>,
+    pub(crate) description: Vec<Description>,
+    pub(crate) categories: Vec<Categories>,
+    pub(crate) image: Vec<Image>,
     pub(crate) xprop: Vec<Xprop>,
     pub(crate) iana: Vec<Iana>,
     pub(crate) components: Vec<Component>,
@@ -107,6 +123,28 @@ impl std::fmt::Display for Calendar {
         if let Some(v) = &self.method {
             write!(f, "{v}\r\n")?;
         }
+        if let Some(v) = &self.uid {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.last_mod {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.url {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.refresh_interval {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.source {
+            write!(f, "{v}\r\n")?;
+        }
+        if let Some(v) = &self.color {
+            write!(f, "{v}\r\n")?;
+        }
+        write_lines(f, &self.name)?;
+        write_lines(f, &self.description)?;
+        write_lines(f, &self.categories)?;
+        write_lines(f, &self.image)?;
         write_lines(f, &self.xprop)?;
         write_lines(f, &self.iana)?;
         for c in &self.components {
@@ -131,10 +169,42 @@ impl Calendar {
     /// validation deferred to `build()` (see the [`crate::ast`] module docs).
     /// A stream containing more than one `icalobject` back to back isn't
     /// supported by this function — it parses exactly one `VCALENDAR` and
-    /// errors if anything follows.
+    /// errors if anything follows. Use [`Calendar::parse_stream`] for a
+    /// stream of several.
     pub fn parse(src: &[u8]) -> Result<Self, CalendarParseError> {
         let tokens = Lexer::new(src).scan()?;
         Parser::new(tokens).calendar().map_err(Into::into)
+    }
+
+    /// Parses an iCalendar stream (RFC 5545 §3.4) of one or more back-to-back
+    /// `BEGIN:VCALENDAR ... END:VCALENDAR` objects (`icalstream =
+    /// 1*icalobject`), returning one [`Calendar`] per object, in order.
+    ///
+    /// RFC 5545 explicitly allows several `icalobject`s to be grouped
+    /// sequentially in one stream — e.g. a full calendar export composed of
+    /// several independently-produced `VCALENDAR`s concatenated together.
+    /// [`Calendar::parse`] only ever accepts exactly one object and errors
+    /// on anything trailing it; this is the entry point for the general
+    /// case.
+    ///
+    /// Example:
+    ///
+    /// > BEGIN:VCALENDAR
+    /// > ...
+    /// > END:VCALENDAR
+    /// > BEGIN:VCALENDAR
+    /// > ...
+    /// > END:VCALENDAR
+    ///
+    /// [Section 3.4](https://datatracker.ietf.org/doc/html/rfc5545#section-3.4)
+    pub fn parse_stream(src: &[u8]) -> Result<Vec<Self>, CalendarParseError> {
+        let tokens = Lexer::new(src).scan()?;
+        let mut parser = Parser::new(tokens);
+        let mut calendars = Vec::new();
+        while !parser.is_at_end()? {
+            calendars.push(parser.calendar()?);
+        }
+        Ok(calendars)
     }
 }
 
@@ -157,14 +227,17 @@ mod tests {
     use super::*;
 
     #[test]
+    // rustfmt's `format_strings` wrapping of this literal corrupts its
+    // runtime value (it splits inside a `\r\n` escape pair, not between
+    // whole escapes) — skip it here rather than let a formatting pass
+    // silently reintroduce that bug.
+    #[rustfmt::skip]
     fn calendar_display_round_trips_a_minimal_calendar() {
         let src = b"BEGIN:VCALENDAR\r\nPRODID:-//example//EN\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:123@example.com\r\nDTSTAMP:19970901T130000Z\r\nDTSTART:19970903T163000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
         let calendar = Calendar::parse(src).unwrap();
         assert_eq!(
             calendar.to_string(),
-            "BEGIN:VCALENDAR\r\nPRODID:-//example//EN\r\nVERSION:2.0\r\nBEGIN:\
-             VEVENT\r\nDTSTAMP:19970901T130000Z\r\nUID:123@example.com\r\\
-             nDTSTART:19970903T163000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+            "BEGIN:VCALENDAR\r\nPRODID:-//example//EN\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nDTSTAMP:19970901T130000Z\r\nUID:123@example.com\r\nDTSTART:19970903T163000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
         );
     }
 

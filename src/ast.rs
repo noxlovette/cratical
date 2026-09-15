@@ -653,11 +653,20 @@ pub(crate) enum Property {
     #[cfg(feature = "rfc_9074")]
     Proximity(Proximity),
     /// `NAME` ([`Name`]), RFC 7986 §5.1.
-    #[cfg(feature = "rfc_9074")]
     Name(Name),
     /// `LOCATION-TYPE` ([`LocationType`]), RFC 9073 §6.1.
     #[cfg(feature = "rfc_9074")]
     LocationType(LocationType),
+    /// `COLOR` ([`Color`]), RFC 7986 §5.9.
+    Color(Color),
+    /// `IMAGE` ([`Image`]), RFC 7986 §5.10.
+    Image(Image),
+    /// `CONFERENCE` ([`Conference`]), RFC 7986 §5.11.
+    Conference(Conference),
+    /// `REFRESH-INTERVAL` ([`RefreshInterval`]), RFC 7986 §5.7.
+    RefreshInterval(RefreshInterval),
+    /// `SOURCE` ([`Source`]), RFC 7986 §5.8.
+    Source(Source),
 }
 
 impl From<CalendarScale> for Property {
@@ -918,7 +927,6 @@ impl From<Proximity> for Property {
         Self::Proximity(value)
     }
 }
-#[cfg(feature = "rfc_9074")]
 impl From<Name> for Property {
     fn from(value: Name) -> Self {
         Self::Name(value)
@@ -928,6 +936,31 @@ impl From<Name> for Property {
 impl From<LocationType> for Property {
     fn from(value: LocationType) -> Self {
         Self::LocationType(value)
+    }
+}
+impl From<Color> for Property {
+    fn from(value: Color) -> Self {
+        Self::Color(value)
+    }
+}
+impl From<Image> for Property {
+    fn from(value: Image) -> Self {
+        Self::Image(value)
+    }
+}
+impl From<Conference> for Property {
+    fn from(value: Conference) -> Self {
+        Self::Conference(value)
+    }
+}
+impl From<RefreshInterval> for Property {
+    fn from(value: RefreshInterval) -> Self {
+        Self::RefreshInterval(value)
+    }
+}
+impl From<Source> for Property {
+    fn from(value: Source) -> Self {
+        Self::Source(value)
     }
 }
 
@@ -1007,6 +1040,16 @@ macro_rules! property_dispatch_map {
             b"EXDATE" => |v| ExceptionDateTimes::try_from(v).map(Into::into),
             b"RDATE" => |v| RecurrenceDateTimes::try_from(v).map(Into::into),
             b"RRULE" => |v| RRule::try_from(v).map(Into::into),
+            // RFC 7986 new properties. RFC 7986 updates RFC 5545 itself
+            // (unlike RFC 7953/9074's distinct new components/extensions),
+            // so this crate treats it as core and always compiles it in —
+            // no feature flag.
+            b"NAME" => |v| Name::try_from(v).map(Into::into),
+            b"COLOR" => |v| Color::try_from(v).map(Into::into),
+            b"IMAGE" => |v| Image::try_from(v).map(Into::into),
+            b"CONFERENCE" => |v| Conference::try_from(v).map(Into::into),
+            b"REFRESH-INTERVAL" => |v| RefreshInterval::try_from(v).map(Into::into),
+            b"SOURCE" => |v| Source::try_from(v).map(Into::into),
             $($extra)*
         }
     };
@@ -1017,7 +1060,6 @@ static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> = property_dis
     b"BUSYTYPE" => |v| BusyType::try_from(v).map(Into::into),
     b"ACKNOWLEDGED" => |v| Acknowledged::try_from(v).map(Into::into),
     b"PROXIMITY" => |v| Proximity::try_from(v).map(Into::into),
-    b"NAME" => |v| Name::try_from(v).map(Into::into),
     b"LOCATION-TYPE" => |v| LocationType::try_from(v).map(Into::into),
 };
 
@@ -1030,7 +1072,6 @@ static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> = property_dis
 static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> = property_dispatch_map! {
     b"ACKNOWLEDGED" => |v| Acknowledged::try_from(v).map(Into::into),
     b"PROXIMITY" => |v| Proximity::try_from(v).map(Into::into),
-    b"NAME" => |v| Name::try_from(v).map(Into::into),
     b"LOCATION-TYPE" => |v| LocationType::try_from(v).map(Into::into),
 };
 
@@ -1067,6 +1108,18 @@ struct CalendarBuilder {
     version: Option<Version>,
     calscale: Option<CalendarScale>,
     method: Option<Method>,
+    // RFC 7986 §5 new/extended `VCALENDAR`-level properties (core, not
+    // feature-gated — see `property_dispatch_map!`'s doc comment).
+    uid: Option<Uid>,
+    last_mod: Option<LastModified>,
+    url: Option<UniformResourceLocator>,
+    refresh_interval: Option<RefreshInterval>,
+    source: Option<Source>,
+    color: Option<Color>,
+    name: Vec<Name>,
+    description: Vec<Description>,
+    categories: Vec<Categories>,
+    image: Vec<Image>,
     xprop: Vec<Xprop>,
     iana: Vec<Iana>,
     components: Vec<Component>,
@@ -1107,6 +1160,16 @@ impl CalendarBuilder {
             version,
             calscale: self.calscale,
             method: self.method,
+            uid: self.uid,
+            last_mod: self.last_mod,
+            url: self.url,
+            refresh_interval: self.refresh_interval,
+            source: self.source,
+            color: self.color,
+            name: self.name,
+            description: self.description,
+            categories: self.categories,
+            image: self.image,
             xprop: self.xprop,
             iana: self.iana,
             components,
@@ -1285,6 +1348,10 @@ struct EventBuilder {
     related: Vec<RelatedTo>,
     resources: Vec<Resources>,
     rdate: Vec<RecurrenceDateTimes>,
+    // RFC 7986 §5.9/§5.10/§5.11 — core, not feature-gated.
+    color: Option<Color>,
+    image: Vec<Image>,
+    conference: Vec<Conference>,
     xprop: Vec<Xprop>,
     iana: Vec<Iana>,
     alarms: Vec<AlarmBuilder>,
@@ -1356,6 +1423,9 @@ impl EventBuilder {
             related: self.related,
             resources: self.resources,
             rdate: self.rdate,
+            color: self.color,
+            image: self.image,
+            conference: self.conference,
             xprop: self.xprop,
             iana: self.iana,
             alarms,
@@ -1425,6 +1495,9 @@ impl PropertyIngest for EventBuilder {
             Property::RelatedTo(v) => push_ok(&mut self.related, v),
             Property::Resources(v) => push_ok(&mut self.resources, v),
             Property::RecurrenceDateTimes(v) => push_ok(&mut self.rdate, v),
+            Property::Color(v) => set_once(&mut self.color, v, "COLOR"),
+            Property::Image(v) => push_ok(&mut self.image, v),
+            Property::Conference(v) => push_ok(&mut self.conference, v),
             Property::Xprop(v) => push_ok(&mut self.xprop, v),
             Property::Iana(v) => push_ok(&mut self.iana, v),
             _ => Err(PropertyError::UnexpectedProperty.into()),
@@ -1465,6 +1538,10 @@ struct TodoBuilder {
     related: Vec<RelatedTo>,
     resources: Vec<Resources>,
     rdate: Vec<RecurrenceDateTimes>,
+    // RFC 7986 §5.9/§5.10/§5.11 — core, not feature-gated.
+    color: Option<Color>,
+    image: Vec<Image>,
+    conference: Vec<Conference>,
     xprop: Vec<Xprop>,
     iana: Vec<Iana>,
     alarms: Vec<AlarmBuilder>,
@@ -1535,6 +1612,9 @@ impl TodoBuilder {
             related: self.related,
             resources: self.resources,
             rdate: self.rdate,
+            color: self.color,
+            image: self.image,
+            conference: self.conference,
             xprop: self.xprop,
             iana: self.iana,
             alarms,
@@ -1607,6 +1687,9 @@ impl PropertyIngest for TodoBuilder {
             Property::RelatedTo(v) => push_ok(&mut self.related, v),
             Property::Resources(v) => push_ok(&mut self.resources, v),
             Property::RecurrenceDateTimes(v) => push_ok(&mut self.rdate, v),
+            Property::Color(v) => set_once(&mut self.color, v, "COLOR"),
+            Property::Image(v) => push_ok(&mut self.image, v),
+            Property::Conference(v) => push_ok(&mut self.conference, v),
             Property::Xprop(v) => push_ok(&mut self.xprop, v),
             Property::Iana(v) => push_ok(&mut self.iana, v),
             _ => Err(PropertyError::UnexpectedProperty.into()),
@@ -1976,6 +2059,8 @@ impl JournalBuilder {
             related: self.related,
             rdate: self.rdate,
             rstatus: self.rstatus,
+            color: self.color,
+            image: self.image,
             xprop: self.xprop,
             iana: self.iana,
         })
@@ -2024,6 +2109,8 @@ impl PropertyIngest for JournalBuilder {
             Property::RelatedTo(v) => push_ok(&mut self.related, v),
             Property::RecurrenceDateTimes(v) => push_ok(&mut self.rdate, v),
             Property::RequestStatus(v) => push_ok(&mut self.rstatus, v),
+            Property::Color(v) => set_once(&mut self.color, v, "COLOR"),
+            Property::Image(v) => push_ok(&mut self.image, v),
             Property::Xprop(v) => push_ok(&mut self.xprop, v),
             Property::Iana(v) => push_ok(&mut self.iana, v),
             _ => Err(PropertyError::UnexpectedProperty.into()),
@@ -2072,6 +2159,10 @@ struct JournalBuilder {
     related: Vec<RelatedTo>,
     rdate: Vec<RecurrenceDateTimes>,
     rstatus: Vec<RequestStatus>,
+    // RFC 7986 §5.9/§5.10 — core, not feature-gated (no `CONFERENCE` here:
+    // RFC 7986 §5.11 only allows it on `VEVENT`/`VTODO`).
+    color: Option<Color>,
+    image: Vec<Image>,
     xprop: Vec<Xprop>,
     iana: Vec<Iana>,
 }

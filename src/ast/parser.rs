@@ -74,6 +74,33 @@ impl Parser {
                 Property::Version(v) => cal.version = Some(v),
                 Property::Method(m) => cal.method = Some(m),
                 Property::CalendarScale(c) => cal.calscale = Some(c),
+                // RFC 7986 §5 new/extended `VCALENDAR`-level properties —
+                // core, not feature-gated (see `crate::ast`'s
+                // `property_dispatch_map!` doc comment).
+                Property::Uid(v) => {
+                    crate::ast::set_once(&mut cal.uid, v, "UID")?
+                }
+                Property::LastModified(v) => {
+                    crate::ast::set_once(&mut cal.last_mod, v, "LAST-MODIFIED")?
+                }
+                Property::UniformResourceLocator(v) => {
+                    crate::ast::set_once(&mut cal.url, v, "URL")?
+                }
+                Property::RefreshInterval(v) => crate::ast::set_once(
+                    &mut cal.refresh_interval,
+                    v,
+                    "REFRESH-INTERVAL",
+                )?,
+                Property::Source(v) => {
+                    crate::ast::set_once(&mut cal.source, v, "SOURCE")?
+                }
+                Property::Color(v) => {
+                    crate::ast::set_once(&mut cal.color, v, "COLOR")?
+                }
+                Property::Name(v) => cal.name.push(v),
+                Property::Description(v) => cal.description.push(v),
+                Property::Categories(v) => cal.categories.push(v),
+                Property::Image(v) => cal.image.push(v),
                 Property::Xprop(x) => cal.xprop.push(x),
                 Property::Iana(i) => cal.iana.push(i),
                 _ => return Err(PropertyError::UnexpectedProperty.into()),
@@ -91,7 +118,17 @@ impl Parser {
         {
             return Err(ParseError::MismatchedEnd);
         }
-        self.consume(Crlf, "expected crlf after END")?;
+        // Real-world producers routinely omit the final line terminator
+        // after the outermost `END:VCALENDAR` (many editors/exporters trim
+        // a trailing newline). Every other CRLF in the grammar is still
+        // mandatory — there's always more content after it — but this one
+        // is only ever followed by EOF or, in a multi-object stream (see
+        // `Calendar::parse_stream`), a CRLF followed by the next object's
+        // `BEGIN`. The latter case still has a real CRLF token to consume;
+        // only true EOF (nothing left at all) gets a pass.
+        if !self.is_at_end()? {
+            self.consume(Crlf, "expected crlf after END")?;
+        }
 
         Ok(cal.build()?)
     }
@@ -384,7 +421,7 @@ impl Parser {
     }
 
     /// checks whether we are at the end of the tokens list
-    fn is_at_end(&self) -> ParseResult<bool> {
+    pub(crate) fn is_at_end(&self) -> ParseResult<bool> {
         Ok(self.peek()?.token_type() == Eof)
     }
 
