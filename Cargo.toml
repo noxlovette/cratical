@@ -21,6 +21,9 @@ thiserror = "2"
 url = "2.5.8"
 
 [features]
-default = ["rfc_7953"]
+default = ["rfc_7953", "rfc_9074"]
 # RFC 7953: VAVAILABILITY calendar availability component.
 rfc_7953 = []
+# RFC 9073 VLOCATION (nested inside VALARM) and the RFC 9074 VALARM
+# extensions (UID, RELATED-TO, ACKNOWLEDGED, PROXIMITY).
+rfc_9074 = []

@@ -5,6 +5,11 @@ use crate::{
         Summary, Trigger, Xprop,
     },
 };
+#[cfg(feature = "rfc_9074")]
+use crate::{
+    components::{vlocation::VLocation, write_components},
+    properties::{Acknowledged, Proximity, RelatedTo, Uid},
+};
 
 /// A "VALARM" calendar component is a grouping of component
 /// properties that is a reminder or alarm for an event or a to-do.
@@ -36,6 +41,13 @@ use crate::{
 /// > END:VALARM
 /// >
 ///
+/// Under the `rfc_9074` feature, this type also carries the [RFC
+/// 9074](https://datatracker.ietf.org/doc/html/rfc9074) `VALARM` extensions
+/// — `UID`, `RELATED-TO`, `ACKNOWLEDGED`, `PROXIMITY` — and nested
+/// `VLOCATION` sub-components ([RFC
+/// 9073](https://datatracker.ietf.org/doc/html/rfc9073) §7.2), which are
+/// only legal alongside a `PROXIMITY` property (checked at build time).
+///
 /// [Section 3.6.6](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.6)
 #[derive(Debug)]
 pub struct Alarm {
@@ -49,6 +61,16 @@ pub struct Alarm {
     pub(crate) summary: Option<Summary>,
     pub(crate) attendee: Vec<Attendee>,
     pub(crate) attach: Vec<Attachment>,
+    #[cfg(feature = "rfc_9074")]
+    pub(crate) uid: Option<Uid>,
+    #[cfg(feature = "rfc_9074")]
+    pub(crate) related: Vec<RelatedTo>,
+    #[cfg(feature = "rfc_9074")]
+    pub(crate) acknowledged: Option<Acknowledged>,
+    #[cfg(feature = "rfc_9074")]
+    pub(crate) proximity: Option<Proximity>,
+    #[cfg(feature = "rfc_9074")]
+    pub(crate) locations: Vec<VLocation>,
     pub(crate) xprop: Vec<Xprop>,
     pub(crate) iana: Vec<Iana>,
 }
@@ -94,6 +116,36 @@ impl Alarm {
         &self.attach
     }
 
+    /// The `UID` property (RFC 9074 §4), if present.
+    #[cfg(feature = "rfc_9074")]
+    pub fn uid(&self) -> Option<&Uid> {
+        self.uid.as_ref()
+    }
+
+    /// The `RELATED-TO` properties (RFC 9074 §5).
+    #[cfg(feature = "rfc_9074")]
+    pub fn related(&self) -> &[RelatedTo] {
+        &self.related
+    }
+
+    /// The `ACKNOWLEDGED` property (RFC 9074 §6.1), if present.
+    #[cfg(feature = "rfc_9074")]
+    pub fn acknowledged(&self) -> Option<&Acknowledged> {
+        self.acknowledged.as_ref()
+    }
+
+    /// The `PROXIMITY` property (RFC 9074 §8.1), if present.
+    #[cfg(feature = "rfc_9074")]
+    pub fn proximity(&self) -> Option<&Proximity> {
+        self.proximity.as_ref()
+    }
+
+    /// The nested `VLOCATION` sub-components (RFC 9073 §7.2).
+    #[cfg(feature = "rfc_9074")]
+    pub fn locations(&self) -> &[VLocation] {
+        &self.locations
+    }
+
     /// The non-standard (`X-`) properties.
     pub fn xprop(&self) -> &[Xprop] {
         &self.xprop
@@ -124,8 +176,23 @@ impl std::fmt::Display for Alarm {
         }
         write_lines(f, &self.attendee)?;
         write_lines(f, &self.attach)?;
+        #[cfg(feature = "rfc_9074")]
+        {
+            if let Some(v) = &self.uid {
+                write!(f, "{v}\r\n")?;
+            }
+            write_lines(f, &self.related)?;
+            if let Some(v) = &self.acknowledged {
+                write!(f, "{v}\r\n")?;
+            }
+            if let Some(v) = &self.proximity {
+                write!(f, "{v}\r\n")?;
+            }
+        }
         write_lines(f, &self.xprop)?;
         write_lines(f, &self.iana)?;
+        #[cfg(feature = "rfc_9074")]
+        write_components(f, &self.locations)?;
         write!(f, "END:VALARM\r\n")
     }
 }

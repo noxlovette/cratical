@@ -1,4 +1,6 @@
 use super::token::Token;
+#[cfg(feature = "rfc_9074")]
+use crate::ast::VLocationBuilder;
 #[cfg(feature = "rfc_7953")]
 use crate::ast::{AvailabilityBuilder, AvailableBuilder};
 use crate::{
@@ -167,9 +169,11 @@ impl Parser {
     /// §3.6.6). This is deliberately not a recursive call into
     /// [`Self::component`]: `VALARM` is a distinct grammar production with
     /// its own alphabet of legal properties and its own builder type
-    /// ([`AlarmBuilder`], not [`Component`]) — alarms also don't nest
-    /// further, so there's no need to watch for another `BEGIN` inside this
-    /// loop the way [`Self::component`] does.
+    /// ([`AlarmBuilder`], not [`Component`]). Under the `rfc_9074` feature,
+    /// a `VALARM` can itself nest `VLOCATION` sub-components (RFC 9073
+    /// §7.2, via RFC 9074 §8's proximity extension) — same dispatch-by-name
+    /// shape as [`Self::component`]'s own nested-`BEGIN` handling, just with
+    /// a single legal name instead of several.
     fn alarm(&mut self) -> ParseResult<AlarmBuilder> {
         let begin =
             self.consume(Begin, "expected sub-component to start with BEGIN")?;
@@ -180,10 +184,22 @@ impl Parser {
 
         let mut alarm = AlarmBuilder::new();
         while !self.check(End)? {
-            let prop = self.consume(Property, "expected a property line")?;
-            let property = Property::parse(prop.lexeme(), prop.literal())?;
-            self.consume(Crlf, "expected crlf after property")?;
-            alarm.ingest(property)?;
+            if self.check(Begin)? {
+                match self.peek()?.literal() {
+                    #[cfg(feature = "rfc_9074")]
+                    b"VLOCATION" => {
+                        let location = self.location()?;
+                        alarm.locations.push(location);
+                    }
+                    _ => return Err(ParseError::UnknownComponent),
+                }
+            } else {
+                let prop =
+                    self.consume(Property, "expected a property line")?;
+                let property = Property::parse(prop.lexeme(), prop.literal())?;
+                self.consume(Crlf, "expected crlf after property")?;
+                alarm.ingest(property)?;
+            }
         }
 
         let end =
@@ -194,6 +210,37 @@ impl Parser {
         self.consume(Crlf, "expected crlf after END")?;
 
         Ok(alarm)
+    }
+
+    /// parses one `BEGIN:VLOCATION ... END:VLOCATION` sub-component (RFC
+    /// 9073 §7.2), nested only inside `VALARM` — same shape as
+    /// [`Self::alarm`]/[`Self::available`]: its own grammar production, its
+    /// own builder type ([`VLocationBuilder`]), no further nesting.
+    #[cfg(feature = "rfc_9074")]
+    fn location(&mut self) -> ParseResult<VLocationBuilder> {
+        let begin =
+            self.consume(Begin, "expected sub-component to start with BEGIN")?;
+        if begin.literal() != b"VLOCATION" {
+            return Err(ParseError::UnknownComponent);
+        }
+        self.consume(Crlf, "expected crlf after BEGIN")?;
+
+        let mut location = VLocationBuilder::new();
+        while !self.check(End)? {
+            let prop = self.consume(Property, "expected a property line")?;
+            let property = Property::parse(prop.lexeme(), prop.literal())?;
+            self.consume(Crlf, "expected crlf after property")?;
+            location.ingest(property)?;
+        }
+
+        let end =
+            self.consume(End, "expected sub-component to end with END")?;
+        if end.literal() != b"VLOCATION" {
+            return Err(ParseError::MismatchedEnd);
+        }
+        self.consume(Crlf, "expected crlf after END")?;
+
+        Ok(location)
     }
 
     /// parses one `BEGIN:AVAILABLE ... END:AVAILABLE` sub-component (RFC

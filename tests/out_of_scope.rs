@@ -1,16 +1,16 @@
-//! Regression coverage for the scope decision in issue #7: this crate
-//! targets RFC 5545 core, plus `VAVAILABILITY` (RFC 7953, added under the
-//! `rfc_7953` feature — see issue #16). `VLOCATION` (RFC 9073, nested
-//! inside `VALARM`) and the RFC 9074 `VALARM` extensions (`UID`,
-//! `PROXIMITY`, `ACKNOWLEDGED`) remain deliberately not implemented — see
+//! Regression coverage for the scope decisions in issues #7 and #17: this
+//! crate targets RFC 5545 core, plus `VAVAILABILITY` (RFC 7953, added under
+//! the `rfc_7953` feature — see issue #16) and `VLOCATION`/the RFC 9074
+//! `VALARM` extensions (`UID`, `RELATED-TO`, `ACKNOWLEDGED`, `PROXIMITY`,
+//! added under the `rfc_9074` feature — see issue #17). See
 //! `src/components.rs`'s module doc.
 //!
-//! The `VAVAILABILITY` fixtures below still return `Err` from
-//! `Calendar::parse` even though the component itself is now supported —
-//! see each test's own doc for why (a bare component excerpt with no
+//! Every fixture below still returns `Err` from `Calendar::parse` even
+//! though the component/properties it exercises are now supported — see
+//! each test's own doc for why (a bare component excerpt with no
 //! `VCALENDAR` wrapper, or one missing `PRODID`/`VERSION`), which is
-//! unrelated to `VAVAILABILITY` support. Real `VAVAILABILITY` parsing
-//! coverage lives in `tests/rfc_7953.rs`.
+//! unrelated to whether this crate implements what the fixture contains.
+//! Real parsing coverage lives in `tests/rfc_7953.rs`/`tests/rfc_9074.rs`.
 //!
 //! Every fixture used here is real-world-valid for the RFC it demonstrates,
 //! but exercises a component/property this crate doesn't model, so it's
@@ -75,8 +75,10 @@ fn vavailability_example_3_missing_prodid_and_version() {
 }
 
 /// A bare `VEVENT`/`VALARM` excerpt (RFC 9074 §6's first example) — no
-/// `VCALENDAR` wrapper, and the `VALARM` carries an RFC 9074 `UID` this
-/// crate's `AlarmBuilder` doesn't model as a dedicated property.
+/// `VCALENDAR` wrapper, so it can't be fed to `Calendar::parse` as-is even
+/// though its `VALARM`'s `UID`/`ACKNOWLEDGED` are supported under the
+/// `rfc_9074` feature. See `tests/rfc_9074.rs` for this same example
+/// wrapped in a minimal `VCALENDAR`, where it parses successfully.
 #[test]
 fn rfc_9074_example_1_is_not_a_full_calendar_object() {
     let bytes = fixture("events/rfc_9074_example_1.ics");
@@ -96,8 +98,7 @@ fn rfc_9074_example_2_is_not_a_full_calendar_object() {
     ));
 }
 
-/// RFC 9074 §6's third example — a `VALARM` with a nested `VLOCATION` (RFC
-/// 9073), which isn't a component this crate's `AlarmBuilder` recognizes.
+/// Same shape (RFC 9074 §6's third example).
 #[test]
 fn rfc_9074_example_3_is_not_a_full_calendar_object() {
     let bytes = fixture("events/rfc_9074_example_3.ics");
@@ -107,7 +108,7 @@ fn rfc_9074_example_3_is_not_a_full_calendar_object() {
     ));
 }
 
-/// RFC 9074 §6's fourth example.
+/// Same shape (RFC 9074 §6's fourth example).
 #[test]
 fn rfc_9074_example_4_is_not_a_full_calendar_object() {
     let bytes = fixture("events/rfc_9074_example_4.ics");
@@ -117,7 +118,10 @@ fn rfc_9074_example_4_is_not_a_full_calendar_object() {
     ));
 }
 
-/// RFC 9074's `PROXIMITY` `VALARM` extension example.
+/// RFC 9074's `PROXIMITY` `VALARM` extension example (RFC 9074 §8.2) — a
+/// `VALARM` with a nested `VLOCATION` (RFC 9073 §7.2). No `VCALENDAR`
+/// wrapper, so still an `Err`, even though `PROXIMITY`/`VLOCATION` are
+/// supported under the `rfc_9074` feature.
 #[test]
 fn rfc_9074_proximity_example_is_not_a_full_calendar_object() {
     let bytes = fixture("events/rfc_9074_example_proximity.ics");

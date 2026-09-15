@@ -6,6 +6,8 @@ use parser::{ParseError, ParseResult};
 
 #[cfg(feature = "rfc_7953")]
 use crate::components::availability::{Availability, Available};
+#[cfg(feature = "rfc_9074")]
+use crate::components::vlocation::VLocation;
 use crate::{
     Calendar,
     calendar::Component as CalComponent,
@@ -644,6 +646,18 @@ pub(crate) enum Property {
     /// `BUSYTYPE` ([`BusyType`]), RFC 7953 §3.1.
     #[cfg(feature = "rfc_7953")]
     BusyType(BusyType),
+    /// `ACKNOWLEDGED` ([`Acknowledged`]), RFC 9074 §6.1.
+    #[cfg(feature = "rfc_9074")]
+    Acknowledged(Acknowledged),
+    /// `PROXIMITY` ([`Proximity`]), RFC 9074 §8.1.
+    #[cfg(feature = "rfc_9074")]
+    Proximity(Proximity),
+    /// `NAME` ([`Name`]), RFC 7986 §5.1.
+    #[cfg(feature = "rfc_9074")]
+    Name(Name),
+    /// `LOCATION-TYPE` ([`LocationType`]), RFC 9073 §6.1.
+    #[cfg(feature = "rfc_9074")]
+    LocationType(LocationType),
 }
 
 impl From<CalendarScale> for Property {
@@ -892,6 +906,30 @@ impl From<BusyType> for Property {
         Self::BusyType(value)
     }
 }
+#[cfg(feature = "rfc_9074")]
+impl From<Acknowledged> for Property {
+    fn from(value: Acknowledged) -> Self {
+        Self::Acknowledged(value)
+    }
+}
+#[cfg(feature = "rfc_9074")]
+impl From<Proximity> for Property {
+    fn from(value: Proximity) -> Self {
+        Self::Proximity(value)
+    }
+}
+#[cfg(feature = "rfc_9074")]
+impl From<Name> for Property {
+    fn from(value: Name) -> Self {
+        Self::Name(value)
+    }
+}
+#[cfg(feature = "rfc_9074")]
+impl From<LocationType> for Property {
+    fn from(value: LocationType) -> Self {
+        Self::LocationType(value)
+    }
+}
 
 /// Parses a property's raw, unparsed remainder (`*(";" param) ":" value`,
 /// exactly what a
@@ -911,11 +949,14 @@ type PropertyParser = fn(&[u8]) -> ParseResult<Property>;
 ///
 /// Expands to the base entries above (every keyword RFC 5545 itself
 /// defines), with `$($extra)*` spliced in after them for feature-gated
-/// extensions (e.g. `rfc_7953`'s `BUSYTYPE`) — a `cfg` on a `phf_map!` entry
-/// isn't meaningful (the map is built by a proc macro, not expanded as
-/// ordinary items), so the two `PROPERTY_DISPATCH` definitions below select
-/// between the whole map literal via `cfg` on the `static` item itself
-/// instead, sharing this one list of base entries rather than duplicating
+/// extensions (`rfc_7953`'s `BUSYTYPE`, `rfc_9074`'s `ACKNOWLEDGED`/
+/// `PROXIMITY`/`NAME`/`LOCATION-TYPE`) — a `cfg` on a `phf_map!` entry isn't
+/// meaningful (the map is built by a proc macro, not expanded as ordinary
+/// items, so a nested macro call standing in for a feature's entries isn't
+/// pre-expanded either), so the four `PROPERTY_DISPATCH` definitions below
+/// select between the whole map literal via `cfg` on the `static` item
+/// itself instead — one per combination of the two independent feature
+/// flags — sharing this one list of base entries rather than duplicating
 /// it.
 macro_rules! property_dispatch_map {
     ($($extra:tt)*) => {
@@ -971,12 +1012,29 @@ macro_rules! property_dispatch_map {
     };
 }
 
-#[cfg(feature = "rfc_7953")]
+#[cfg(all(feature = "rfc_7953", feature = "rfc_9074"))]
+static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> = property_dispatch_map! {
+    b"BUSYTYPE" => |v| BusyType::try_from(v).map(Into::into),
+    b"ACKNOWLEDGED" => |v| Acknowledged::try_from(v).map(Into::into),
+    b"PROXIMITY" => |v| Proximity::try_from(v).map(Into::into),
+    b"NAME" => |v| Name::try_from(v).map(Into::into),
+    b"LOCATION-TYPE" => |v| LocationType::try_from(v).map(Into::into),
+};
+
+#[cfg(all(feature = "rfc_7953", not(feature = "rfc_9074")))]
 static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> = property_dispatch_map! {
     b"BUSYTYPE" => |v| BusyType::try_from(v).map(Into::into),
 };
 
-#[cfg(not(feature = "rfc_7953"))]
+#[cfg(all(not(feature = "rfc_7953"), feature = "rfc_9074"))]
+static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> = property_dispatch_map! {
+    b"ACKNOWLEDGED" => |v| Acknowledged::try_from(v).map(Into::into),
+    b"PROXIMITY" => |v| Proximity::try_from(v).map(Into::into),
+    b"NAME" => |v| Name::try_from(v).map(Into::into),
+    b"LOCATION-TYPE" => |v| LocationType::try_from(v).map(Into::into),
+};
+
+#[cfg(not(any(feature = "rfc_7953", feature = "rfc_9074")))]
 static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> =
     property_dispatch_map! {};
 
@@ -1579,6 +1637,19 @@ struct AlarmBuilder {
     summary: Option<Summary>,
     attendee: Vec<Attendee>,
     attach: Vec<Attachment>,
+    // RFC 9074 §4/§5/§6.1/§8.1 `VALARM` extensions.
+    #[cfg(feature = "rfc_9074")]
+    uid: Option<Uid>,
+    #[cfg(feature = "rfc_9074")]
+    related: Vec<RelatedTo>,
+    #[cfg(feature = "rfc_9074")]
+    acknowledged: Option<Acknowledged>,
+    #[cfg(feature = "rfc_9074")]
+    proximity: Option<Proximity>,
+    // RFC 9073 §7.2 `VLOCATION` sub-components — legal only alongside
+    // `PROXIMITY` (RFC 9074 §8), a cross-field rule checked in `build()`.
+    #[cfg(feature = "rfc_9074")]
+    locations: Vec<VLocationBuilder>,
     xprop: Vec<Xprop>,
     iana: Vec<Iana>,
 }
@@ -1672,6 +1743,17 @@ impl AlarmBuilder {
             ActionEnum::Iana(_) | ActionEnum::XName(_) => {}
         }
 
+        #[cfg(feature = "rfc_9074")]
+        if !self.locations.is_empty() && self.proximity.is_none() {
+            return Err(ComponentError::Requires("VLOCATION", "PROXIMITY"));
+        }
+        #[cfg(feature = "rfc_9074")]
+        let locations = self
+            .locations
+            .into_iter()
+            .map(VLocationBuilder::build)
+            .collect::<Result<Vec<_>, _>>()?;
+
         Ok(Alarm {
             action,
             trigger,
@@ -1681,6 +1763,16 @@ impl AlarmBuilder {
             summary: self.summary,
             attendee: self.attendee,
             attach: self.attach,
+            #[cfg(feature = "rfc_9074")]
+            uid: self.uid,
+            #[cfg(feature = "rfc_9074")]
+            related: self.related,
+            #[cfg(feature = "rfc_9074")]
+            acknowledged: self.acknowledged,
+            #[cfg(feature = "rfc_9074")]
+            proximity: self.proximity,
+            #[cfg(feature = "rfc_9074")]
+            locations,
             xprop: self.xprop,
             iana: self.iana,
         })
@@ -1702,6 +1794,80 @@ impl PropertyIngest for AlarmBuilder {
             Property::Summary(v) => set_once(&mut self.summary, v, "SUMMARY"),
             Property::Attendee(v) => push_ok(&mut self.attendee, v),
             Property::Attachment(v) => push_ok(&mut self.attach, v),
+            #[cfg(feature = "rfc_9074")]
+            Property::Uid(v) => set_once(&mut self.uid, v, "UID"),
+            #[cfg(feature = "rfc_9074")]
+            Property::RelatedTo(v) => push_ok(&mut self.related, v),
+            #[cfg(feature = "rfc_9074")]
+            Property::Acknowledged(v) => {
+                set_once(&mut self.acknowledged, v, "ACKNOWLEDGED")
+            }
+            #[cfg(feature = "rfc_9074")]
+            Property::Proximity(v) => {
+                set_once(&mut self.proximity, v, "PROXIMITY")
+            }
+            Property::Xprop(v) => push_ok(&mut self.xprop, v),
+            Property::Iana(v) => push_ok(&mut self.iana, v),
+            _ => Err(PropertyError::UnexpectedProperty.into()),
+        }
+    }
+}
+
+/// Builder for `VLOCATION` (RFC 9073 §7.2), nested only inside `VALARM`
+/// when a `PROXIMITY` property is also present (RFC 9074 §8) — same shape
+/// as `AlarmBuilder.locations`'s sibling builders elsewhere in this module
+/// (e.g. `AvailableBuilder`).
+#[cfg(feature = "rfc_9074")]
+#[derive(Debug, Default)]
+struct VLocationBuilder {
+    uid: Option<Uid>,
+    name: Option<Name>,
+    description: Option<Description>,
+    geo: Option<Geo>,
+    loctype: Option<LocationType>,
+    url: Option<UniformResourceLocator>,
+    xprop: Vec<Xprop>,
+    iana: Vec<Iana>,
+}
+
+#[cfg(feature = "rfc_9074")]
+impl VLocationBuilder {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// Validates the cross-field rules RFC 9073 §7.2 places on `VLOCATION`
+    /// and assembles the finished [`VLocation`].
+    fn build(self) -> Result<VLocation, ComponentError> {
+        Ok(VLocation {
+            uid: self.uid.ok_or(ComponentError::MissingField("UID"))?,
+            name: self.name,
+            description: self.description,
+            geo: self.geo,
+            loctype: self.loctype,
+            url: self.url,
+            xprop: self.xprop,
+            iana: self.iana,
+        })
+    }
+}
+
+#[cfg(feature = "rfc_9074")]
+impl PropertyIngest for VLocationBuilder {
+    fn ingest(&mut self, p: Property) -> ParseResult<()> {
+        match p {
+            Property::Uid(v) => set_once(&mut self.uid, v, "UID"),
+            Property::Name(v) => set_once(&mut self.name, v, "NAME"),
+            Property::Description(v) => {
+                set_once(&mut self.description, v, "DESCRIPTION")
+            }
+            Property::Geo(v) => set_once(&mut self.geo, v, "GEO"),
+            Property::LocationType(v) => {
+                set_once(&mut self.loctype, v, "LOCATION-TYPE")
+            }
+            Property::UniformResourceLocator(v) => {
+                set_once(&mut self.url, v, "URL")
+            }
             Property::Xprop(v) => push_ok(&mut self.xprop, v),
             Property::Iana(v) => push_ok(&mut self.iana, v),
             _ => Err(PropertyError::UnexpectedProperty.into()),
