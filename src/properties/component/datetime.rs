@@ -164,7 +164,10 @@ impl DateTimeStart {
     /// builders to cross-check it against `EXDATE`/`RDATE`'s own `TZID`
     /// (RFC 5545 §3.8.5.1/§3.8.5.2).
     pub(crate) fn tzid(&self) -> Option<Tz> {
-        self.params.tz_identifier.as_ref().map(TimeZoneIdentifier::tz)
+        self.params
+            .tz_identifier
+            .as_ref()
+            .map(TimeZoneIdentifier::tz)
     }
 }
 
@@ -212,7 +215,8 @@ impl TryFrom<&[u8]> for FreeBusyTimeParams {
         for segment in param_segments(v) {
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
                 b"FBTYPE" => {
-                    params.fb_time_type = param_value(segment)?.as_slice().try_into()?
+                    params.fb_time_type =
+                        param_value(segment)?.as_slice().try_into()?
                 }
                 _ => params.shared.absorb(segment)?,
             }

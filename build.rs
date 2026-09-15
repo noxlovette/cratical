@@ -17,6 +17,13 @@
 //! are excluded from the blanket "must parse successfully" generation below
 //! (`MALFORMED_FIXTURES`) and instead get individual, specific assertions in
 //! `tests/malformed_input.rs`.
+//!
+//! Another handful cover components/properties from RFCs later than 5545
+//! (`VAVAILABILITY`, `VLOCATION`, the RFC 9074 `VALARM` extensions) that
+//! this crate has deliberately decided not to implement (see issue #7 and
+//! `src/components.rs`'s module doc) — excluded the same way
+//! (`OUT_OF_SCOPE_FIXTURES`), with dedicated assertions in
+//! `tests/out_of_scope.rs`.
 
 use std::{
     env, fs,
@@ -45,6 +52,23 @@ const MALFORMED_FIXTURES: &[&str] = &[
     "collective-icalendar/calendars/issue_351_whitespace_in_property_and_params.ics",
 ];
 
+/// Files covering RFC 7953 (`VAVAILABILITY`)/RFC 9073 (`VLOCATION`)/RFC 9074
+/// (`VALARM` extensions) — real-world-valid for those RFCs, but this crate
+/// deliberately implements RFC 5545 core only (see issue #7 and
+/// `src/components.rs`'s module doc). Excluded from the blanket "must parse
+/// successfully" generation; each gets a dedicated assertion in
+/// `tests/out_of_scope.rs` instead.
+const OUT_OF_SCOPE_FIXTURES: &[&str] = &[
+    "collective-icalendar/availabilities/rfc_7953_1.ics",
+    "collective-icalendar/availabilities/rfc_7953_2.ics",
+    "collective-icalendar/calendars/rfc_7953_3.ics",
+    "collective-icalendar/events/rfc_9074_example_1.ics",
+    "collective-icalendar/events/rfc_9074_example_2.ics",
+    "collective-icalendar/events/rfc_9074_example_3.ics",
+    "collective-icalendar/events/rfc_9074_example_4.ics",
+    "collective-icalendar/events/rfc_9074_example_proximity.ics",
+];
+
 fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let fixtures_root = Path::new(&manifest_dir).join("tests/fixtures");
@@ -65,7 +89,9 @@ fn main() {
                 .to_str()
                 .unwrap()
                 .replace('\\', "/");
-            if MALFORMED_FIXTURES.contains(&rel_to_fixtures.as_str()) {
+            if MALFORMED_FIXTURES.contains(&rel_to_fixtures.as_str())
+                || OUT_OF_SCOPE_FIXTURES.contains(&rel_to_fixtures.as_str())
+            {
                 continue;
             }
             emit_test(&mut out, &manifest_dir, dir, &root, &file, true);

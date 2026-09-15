@@ -35,7 +35,8 @@ impl TryFrom<&[u8]> for RequestStatusParams {
         for segment in param_segments(v) {
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
                 b"LANGUAGE" => {
-                    params.language = Some(param_value(segment)?.as_slice().try_into()?)
+                    params.language =
+                        Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 _ => params.shared.absorb(segment)?,
             }

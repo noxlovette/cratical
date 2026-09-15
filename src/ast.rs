@@ -410,20 +410,19 @@ impl DateTimeStart {
         &self,
         exdate: &[ExceptionDateTimes],
     ) -> Result<(), ComponentError> {
-        let matches_type =
-            exdate
-                .iter()
-                .flat_map(ExceptionDateTimes::value)
-                .all(|value| {
-                    matches!(
-                        (self.value(), value),
-                        (DateOrDatetime::Date(_), DateOrDatetime::Date(_))
-                            | (
-                                DateOrDatetime::DateTime(_),
-                                DateOrDatetime::DateTime(_)
-                            )
-                    )
-                });
+        let matches_type = exdate
+            .iter()
+            .flat_map(ExceptionDateTimes::value)
+            .all(|value| {
+                matches!(
+                    (self.value(), value),
+                    (DateOrDatetime::Date(_), DateOrDatetime::Date(_))
+                        | (
+                            DateOrDatetime::DateTime(_),
+                            DateOrDatetime::DateTime(_)
+                        )
+                )
+            });
         if matches_type {
             Ok(())
         } else {
@@ -440,21 +439,20 @@ impl DateTimeStart {
         &self,
         rdate: &[RecurrenceDateTimes],
     ) -> Result<(), ComponentError> {
-        let matches_type =
-            rdate
-                .iter()
-                .flat_map(RecurrenceDateTimes::value)
-                .all(|value| {
-                    matches!(
-                        (self.value(), value),
-                        (DateOrDatetime::Date(_), DateTimePeriod::Date(_))
-                            | (
-                                DateOrDatetime::DateTime(_),
-                                DateTimePeriod::DateTime(_)
-                            )
-                            | (_, DateTimePeriod::Period(_))
-                    )
-                });
+        let matches_type = rdate
+            .iter()
+            .flat_map(RecurrenceDateTimes::value)
+            .all(|value| {
+                matches!(
+                    (self.value(), value),
+                    (DateOrDatetime::Date(_), DateTimePeriod::Date(_))
+                        | (
+                            DateOrDatetime::DateTime(_),
+                            DateTimePeriod::DateTime(_)
+                        )
+                        | (_, DateTimePeriod::Period(_))
+                )
+            });
         if matches_type {
             Ok(())
         } else {
@@ -2145,16 +2143,10 @@ mod build_tests {
         // tests/fixtures/collective-icalendar/events/
         // issue_112_missing_tzinfo_on_exdate.ics
         let mut b = minimal_event_with_zoned_dtstart();
-        b.ingest(prop(
-            b"EXDATE",
-            b";TZID=America/New_York:20131012T120000",
-        ))
-        .unwrap();
-        b.ingest(prop(
-            b"EXDATE",
-            b";TZID=America/New_York:20131011T120000",
-        ))
-        .unwrap();
+        b.ingest(prop(b"EXDATE", b";TZID=America/New_York:20131012T120000"))
+            .unwrap();
+        b.ingest(prop(b"EXDATE", b";TZID=America/New_York:20131011T120000"))
+            .unwrap();
         assert!(b.build(true).is_ok());
     }
 
@@ -2589,9 +2581,7 @@ mod build_tests {
         // silently accepted (see the `TimeZoneIdentifier` doc comment in
         // `params.rs`).
         assert!(matches!(
-            DateTimeStart::try_from(
-                b";TZID=UTC+11:20170228T230000".as_slice(),
-            ),
+            DateTimeStart::try_from(b";TZID=UTC+11:20170228T230000".as_slice(),),
             Err(ParseError::Parameters(ParameterError::Param(
                 crate::params::ParamError::Malformed { .. }
             )))

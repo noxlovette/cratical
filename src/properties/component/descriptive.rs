@@ -107,14 +107,16 @@ impl TryFrom<&[u8]> for AttachmentParams {
         for segment in param_segments(v) {
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
                 b"ENCODING" => {
-                    params.encoding = Some(param_value(segment)?.as_slice().try_into()?)
+                    params.encoding =
+                        Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 b"VALUE" => {
                     params.value_data_type =
                         Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 b"FMTTYPE" => {
-                    params.fmttype = Some(param_value(segment)?.as_slice().try_into()?)
+                    params.fmttype =
+                        Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 _ => params.shared.absorb(segment)?,
             }
@@ -156,7 +158,8 @@ impl TryFrom<&[u8]> for CategoriesParams {
         for segment in param_segments(v) {
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
                 b"LANGUAGE" => {
-                    params.language = Some(param_value(segment)?.as_slice().try_into()?)
+                    params.language =
+                        Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 _ => params.shared.absorb(segment)?,
             }

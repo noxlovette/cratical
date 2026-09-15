@@ -313,7 +313,9 @@ pub enum Fbtype {
     BusyUnavailable,
     /// The interval is tentatively busy.
     BusyTentative,
+    /// A non-standard, `X-`-prefixed value.
     X(Text),
+    /// A value registered with IANA that isn't one of the values above.
     Iana(Text),
 }
 
@@ -416,7 +418,9 @@ pub enum CalendarUserType {
     Room,
     /// The type is unknown.
     Unknown,
+    /// A non-standard, `X-`-prefixed value.
     X(Text),
+    /// A value registered with IANA that isn't one of the values above.
     Iana(Text),
 }
 
@@ -444,7 +448,9 @@ pub enum ParticipationStatus {
     Todo(PartStatTodo),
     /// Status for a `VJOURNAL` attendee.
     Journal(PartStatJournal),
+    /// A non-standard, `X-`-prefixed value.
     X(Text),
+    /// A value registered with IANA that isn't one of the values above.
     Iana(Text),
 }
 
@@ -588,7 +594,9 @@ pub enum ParticipationRole {
     OptParticipant,
     /// Receives a copy but is not expected to participate.
     NonParticipant,
+    /// A non-standard, `X-`-prefixed value.
     X(Text),
+    /// A value registered with IANA that isn't one of the values above.
     Iana(Text),
 }
 
@@ -606,7 +614,9 @@ pub enum PartStatEvent {
     Tentative,
     /// Participation has been delegated to another attendee.
     Delegated,
+    /// A non-standard, `X-`-prefixed value.
     X(Text),
+    /// A value registered with IANA that isn't one of the values above.
     Iana(Text),
 }
 
@@ -628,7 +638,9 @@ pub enum PartStatTodo {
     Completed,
     /// To-do is being worked on.
     InProcess,
+    /// A non-standard, `X-`-prefixed value.
     X(Text),
+    /// A value registered with IANA that isn't one of the values above.
     Iana(Text),
 }
 
@@ -642,7 +654,9 @@ pub enum PartStatJournal {
     Accepted,
     /// Journal entry has been declined.
     Declined,
+    /// A non-standard, `X-`-prefixed value.
     X(Text),
+    /// A value registered with IANA that isn't one of the values above.
     Iana(Text),
 }
 
@@ -673,7 +687,9 @@ pub enum RelationshipType {
     Child,
     /// The referenced component is a sibling (peer).
     Sibling,
+    /// A non-standard, `X-`-prefixed value.
     X(Text),
+    /// A value registered with IANA that isn't one of the values above.
     Iana(Text),
 }
 
@@ -1058,14 +1074,20 @@ impl PropertyParams {
 /// syntax (missing `=`, an unmodeled `NAME`, ...).
 #[derive(Debug, Error)]
 pub enum ParamError {
+    /// `RRULE`'s `FREQ` value didn't match one of the defined frequency names.
     #[error("invalid frequency: {0}")]
     InvalidFreq(String),
+    /// A weekday value (e.g. in `BYDAY`) didn't match one of the two-letter
+    /// weekday abbreviations.
     #[error("invalid weekday: {0}")]
     InvalidWeekday(String),
+    /// The `LANGUAGE` parameter's value isn't a well-formed language tag.
     #[error("malformed LANGUAGE tag")]
     Language,
+    /// The parameter value isn't a valid `quoted-string`.
     #[error("not a quoted-string value")]
     QuotedString,
+    /// The parameter value didn't match its expected grammar.
     #[error("parameter parsing failed. Expected {expected}, got {received:?}")]
     Malformed {
         /// What the parameter value is supposed to be
@@ -1114,9 +1136,7 @@ mod tests {
         // tests/fixtures/collective-icalendar/timezones/
         // issue_55_parse_error_on_utc_offset_with_seconds.ics
         assert!(matches!(
-            TimeZoneIdentifier::try_from(
-                b"America/Los Angeles".as_slice()
-            ),
+            TimeZoneIdentifier::try_from(b"America/Los Angeles".as_slice()),
             Err(ParamError::Malformed { .. })
         ));
     }
@@ -1126,9 +1146,7 @@ mod tests {
         // tests/fixtures/collective-icalendar/timezones/
         // issue_237_brazilia_standard.ics
         assert!(matches!(
-            TimeZoneIdentifier::try_from(
-                "(UTC-03:00) Brasília".as_bytes()
-            ),
+            TimeZoneIdentifier::try_from("(UTC-03:00) Brasília".as_bytes()),
             Err(ParamError::Malformed { .. })
         ));
     }
@@ -1138,9 +1156,7 @@ mod tests {
         // tests/fixtures/collective-icalendar/calendars/
         // issue_836_do_not_quote_tzid.ics
         assert!(matches!(
-            TimeZoneIdentifier::try_from(
-                b"Eastern Standard Time".as_slice()
-            ),
+            TimeZoneIdentifier::try_from(b"Eastern Standard Time".as_slice()),
             Err(ParamError::Malformed { .. })
         ));
     }

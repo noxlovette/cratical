@@ -178,7 +178,8 @@ impl SharedParams {
     /// composite params struct's fallback arm for params it doesn't model.
     fn absorb(&mut self, segment: &[u8]) -> Result<(), ParameterError> {
         let name = param_name(segment)?;
-        let text: Text = crate::ast::decode_caret(segment).as_slice().try_into()?;
+        let text: Text =
+            crate::ast::decode_caret(segment).as_slice().try_into()?;
         if name.to_ascii_uppercase().starts_with(b"X-") {
             self.xname.push(text);
         } else {
@@ -244,14 +245,19 @@ impl TryFrom<&[u8]> for AltrepLanguageParams {
     }
 }
 
+/// An error building or validating a typed property.
 #[derive(Debug, Error)]
 pub enum PropertyError {
+    /// `PRIORITY`'s value was outside its valid range.
     #[error("invalid value for PRIORITY")]
     InvalidPriority,
+    /// `GEO`'s value couldn't be parsed as a latitude/longitude pair.
     #[error("invalid value for GEO")]
     InvalidGeo,
+    /// The property isn't legal wherever it was encountered in the grammar.
     #[error("property is not valid at this position in the grammar")]
     UnexpectedProperty,
+    /// A singleton property occurred more than once in the same component.
     #[error("{0} MUST NOT occur more than once in this component")]
     DuplicateProperty(&'static str),
 }
@@ -424,15 +430,13 @@ mod tests {
         // VALUE=TEXT round-trips through Text's own BACKSLASH-escape
         // decoding (RFC 5545 §3.3.11) — the escaped `;`/`,` must be decoded,
         // not mistaken for real param/value-list delimiters.
-        let text =
-            Iana::try_from(br";VALUE=TEXT:a\;b\,c".as_slice()).unwrap();
+        let text = Iana::try_from(br";VALUE=TEXT:a\;b\,c".as_slice()).unwrap();
         assert_eq!(text.params.iana[0].as_str(), "VALUE=TEXT");
         assert_eq!(text.value.as_str(), "a;b,c");
 
         // No recognized VALUE param at all — still falls back cleanly.
         let unknown =
-            Iana::try_from(b":https://example.com/b.png".as_slice())
-                .unwrap();
+            Iana::try_from(b":https://example.com/b.png".as_slice()).unwrap();
         assert!(unknown.params.iana.is_empty());
         assert_eq!(unknown.value.as_str(), "https://example.com/b.png");
     }
@@ -464,10 +468,7 @@ mod tests {
             moderator.params.iana[2].as_str(),
             "LABEL=Moderator dial-in"
         );
-        assert_eq!(
-            moderator.value.as_str(),
-            "tel:+1-412-555-0123,,,654321"
-        );
+        assert_eq!(moderator.value.as_str(), "tel:+1-412-555-0123,,,654321");
 
         let video = Iana::try_from(
             b";VALUE=URI;FEATURE=AUDIO,VIDEO;LABEL=Attendee dial-in:https://chat.example.com/audio?id=123456"

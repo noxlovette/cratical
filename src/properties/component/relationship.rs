@@ -52,12 +52,19 @@ impl TryFrom<&[u8]> for AttendeeParams {
         for segment in param_segments(v) {
             let value = || param_value(segment);
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
-                b"LANGUAGE" => params.language = Some(value()?.as_slice().try_into()?),
-                b"CUTYPE" => {
-                    params.calendar_user_type = Some(value()?.as_slice().try_into()?)
+                b"LANGUAGE" => {
+                    params.language = Some(value()?.as_slice().try_into()?)
                 }
-                b"MEMBER" => params.member = Some(value()?.as_slice().try_into()?),
-                b"PARTSTAT" => params.status = Some(value()?.as_slice().try_into()?),
+                b"CUTYPE" => {
+                    params.calendar_user_type =
+                        Some(value()?.as_slice().try_into()?)
+                }
+                b"MEMBER" => {
+                    params.member = Some(value()?.as_slice().try_into()?)
+                }
+                b"PARTSTAT" => {
+                    params.status = Some(value()?.as_slice().try_into()?)
+                }
                 b"RSVP" => params.rsvp = Some(value()?.as_slice().try_into()?),
                 b"DELEGATED-TO" => {
                     params.deletegatee = Some(value()?.as_slice().try_into()?)
@@ -65,9 +72,15 @@ impl TryFrom<&[u8]> for AttendeeParams {
                 b"DELEGATED-FROM" => {
                     params.delegator = Some(value()?.as_slice().try_into()?)
                 }
-                b"SENT-BY" => params.sent_by = Some(value()?.as_slice().try_into()?),
-                b"CN" => params.common_name = Some(value()?.as_slice().try_into()?),
-                b"DIR" => params.directory = Some(value()?.as_slice().try_into()?),
+                b"SENT-BY" => {
+                    params.sent_by = Some(value()?.as_slice().try_into()?)
+                }
+                b"CN" => {
+                    params.common_name = Some(value()?.as_slice().try_into()?)
+                }
+                b"DIR" => {
+                    params.directory = Some(value()?.as_slice().try_into()?)
+                }
                 _ => params.shared.absorb(segment)?,
             }
         }
@@ -124,10 +137,18 @@ impl TryFrom<&[u8]> for OrgParams {
         for segment in param_segments(v) {
             let value = || param_value(segment);
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
-                b"LANGUAGE" => params.language = Some(value()?.as_slice().try_into()?),
-                b"CN" => params.common_name = Some(value()?.as_slice().try_into()?),
-                b"DIR" => params.directory = Some(value()?.as_slice().try_into()?),
-                b"SENT-BY" => params.sent_by = Some(value()?.as_slice().try_into()?),
+                b"LANGUAGE" => {
+                    params.language = Some(value()?.as_slice().try_into()?)
+                }
+                b"CN" => {
+                    params.common_name = Some(value()?.as_slice().try_into()?)
+                }
+                b"DIR" => {
+                    params.directory = Some(value()?.as_slice().try_into()?)
+                }
+                b"SENT-BY" => {
+                    params.sent_by = Some(value()?.as_slice().try_into()?)
+                }
                 _ => params.shared.absorb(segment)?,
             }
         }
@@ -188,9 +209,13 @@ impl TryFrom<&[u8]> for RecurrenceParams {
         for segment in param_segments(v) {
             let value = || param_value(segment);
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
-                b"VALUE" => params.data_type = Some(value()?.as_slice().try_into()?),
+                b"VALUE" => {
+                    params.data_type = Some(value()?.as_slice().try_into()?)
+                }
                 b"TZID" => params.tzid = Some(value()?.as_slice().try_into()?),
-                b"RANGE" => params.recurrence = Some(value()?.as_slice().try_into()?),
+                b"RANGE" => {
+                    params.recurrence = Some(value()?.as_slice().try_into()?)
+                }
                 _ => params.shared.absorb(segment)?,
             }
         }
@@ -233,7 +258,8 @@ impl TryFrom<&[u8]> for RelatedToParams {
         for segment in param_segments(v) {
             match param_name(segment)?.to_ascii_uppercase().as_slice() {
                 b"RELTYPE" => {
-                    params.rt = Some(param_value(segment)?.as_slice().try_into()?)
+                    params.rt =
+                        Some(param_value(segment)?.as_slice().try_into()?)
                 }
                 _ => params.shared.absorb(segment)?,
             }
@@ -358,10 +384,7 @@ mod tests {
             format!("{:?}", start_to_finish.params.rt),
             r#"Some(Iana(Text("STARTTOFINISH")))"#
         );
-        assert_eq!(
-            start_to_finish.params.shared.iana[0].as_str(),
-            "VALUE=URI"
-        );
+        assert_eq!(start_to_finish.params.shared.iana[0].as_str(), "VALUE=URI");
         assert_eq!(
             start_to_finish.value.as_str(),
             "https://example.com/caldav/user/jb/cal/19960401-080045-4000F192713.ics"

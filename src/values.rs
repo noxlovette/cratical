@@ -14,6 +14,7 @@ pub use recurrence::Recur;
 use std::{ops::Deref, str::from_utf8};
 use thiserror::Error;
 use url::Url;
+/// Date/time formatting constants and the [`datetime::DateTimeExt`] helper trait.
 pub mod datetime;
 /// The RFC 5545's helper
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1515,6 +1516,7 @@ impl TryFrom<&[u8]> for Boolean {
     }
 }
 
+/// An error parsing a raw property value into one of this crate's typed value representations.
 #[derive(Debug, Error)]
 pub enum ValueError {
     /// [CalendarUserAddress] Parsing Error
@@ -1525,6 +1527,7 @@ pub enum ValueError {
     #[error("Malformed MediaType")]
     MediaType,
 
+    /// `BOOLEAN` Parsing Error
     #[error("Malformed Boolean")]
     Boolean,
 
