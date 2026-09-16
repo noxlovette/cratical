@@ -1,12 +1,15 @@
 use chrono_tz::Tz;
 
 use crate::{
+    ast::ComponentError,
     params::{Fbtype, TimeZoneIdentifier, ValueDataType},
     properties::{
-        ParameterError, SharedParams, param_name, param_segments, param_value,
+        ExceptionDateTimes, ParameterError, RRule, RecurrenceDateTimes,
+        SharedParams, param_name, param_segments, param_value,
     },
     values::{
-        DateOrDatetime, DateTime, Duration as DurationV, Period, ValueError,
+        DateOrDatetime, DateTime, DateTimePeriod, Duration as DurationV,
+        Period, ValueError,
     },
 };
 
@@ -199,6 +202,143 @@ impl DateTimeStart {
             .tz_identifier
             .as_ref()
             .map(TimeZoneIdentifier::tz)
+    }
+
+    /// RFC 5545 §3.8.2.2/§3.8.2.3: `DTEND`'s and `DUE`'s value type "MUST be
+    /// the same value type as the 'DTSTART' property". `name` is used only
+    /// for the error message, so this doubles as the implementation of
+    /// [`Self::cmp_until`]. Used by both the parser's component builders
+    /// (`crate::ast`) and the public, client-facing ones
+    /// (`crate::components`).
+    pub(crate) fn cmp_value_type(
+        &self,
+        other: Option<&DateOrDatetime>,
+        name: &'static str,
+    ) -> Result<(), ComponentError> {
+        let Some(other) = other else {
+            return Ok(());
+        };
+        let matches_type = matches!(
+            (self.value(), other),
+            (DateOrDatetime::Date(_), DateOrDatetime::Date(_))
+                | (DateOrDatetime::DateTime(_), DateOrDatetime::DateTime(_))
+        );
+        if matches_type {
+            Ok(())
+        } else {
+            Err(ComponentError::MismatchedValueType(name, "DTSTART"))
+        }
+    }
+
+    /// RFC 5545 §3.3.10: `RRULE`'s `UNTIL` rule part "MUST have the same
+    /// value type as the 'DTSTART' property". Checked here, once both are
+    /// known, rather than in `Recur::try_from` — which parses `RRULE` on its
+    /// own and has no access to the sibling `DTSTART`.
+    pub(crate) fn cmp_until(
+        &self,
+        rrule: Option<&RRule>,
+    ) -> Result<(), ComponentError> {
+        let Some(rrule) = rrule else {
+            return Ok(());
+        };
+        let Some(until) = rrule.recur().until() else {
+            return Ok(());
+        };
+        self.cmp_value_type(Some(until), "RRULE's UNTIL")
+    }
+
+    /// RFC 5545 §3.8.5.1: "The value type of this property MUST be the same
+    /// as the value type of the 'DTSTART' property" — checked once per
+    /// `EXDATE` value listed across every `EXDATE` property on the
+    /// component (`EXDATE` takes a comma-separated list, and a component
+    /// MAY repeat the property).
+    pub(crate) fn cmp_exdate(
+        &self,
+        exdate: &[ExceptionDateTimes],
+    ) -> Result<(), ComponentError> {
+        let matches_type = exdate
+            .iter()
+            .flat_map(ExceptionDateTimes::value)
+            .all(|value| {
+                matches!(
+                    (self.value(), value),
+                    (DateOrDatetime::Date(_), DateOrDatetime::Date(_))
+                        | (
+                            DateOrDatetime::DateTime(_),
+                            DateOrDatetime::DateTime(_)
+                        )
+                )
+            });
+        if matches_type {
+            Ok(())
+        } else {
+            Err(ComponentError::MismatchedValueType("EXDATE", "DTSTART"))
+        }
+    }
+
+    /// RFC 5545 §3.8.5.2: "The value type of the 'RDATE' property, if
+    /// specified, MUST be the same as the 'DTSTART' property, or its value
+    /// type must be PERIOD" — a `PERIOD` value is always allowed regardless
+    /// of `DTSTART`'s value type, unlike `EXDATE`, which has no `PERIOD`
+    /// alternative.
+    pub(crate) fn cmp_rdate(
+        &self,
+        rdate: &[RecurrenceDateTimes],
+    ) -> Result<(), ComponentError> {
+        let matches_type = rdate
+            .iter()
+            .flat_map(RecurrenceDateTimes::value)
+            .all(|value| {
+                matches!(
+                    (self.value(), value),
+                    (DateOrDatetime::Date(_), DateTimePeriod::Date(_))
+                        | (
+                            DateOrDatetime::DateTime(_),
+                            DateTimePeriod::DateTime(_)
+                        )
+                        | (_, DateTimePeriod::Period(_))
+                )
+            });
+        if matches_type {
+            Ok(())
+        } else {
+            Err(ComponentError::MismatchedValueType("RDATE", "DTSTART"))
+        }
+    }
+
+    /// RFC 5545 §3.8.5.1 requires `EXDATE`'s value type to match
+    /// `DTSTART`'s; real-world producers extend that to expecting the same
+    /// `TZID` too (see issue #6) — a `DTSTART;TZID=America/New_York` paired
+    /// with an `EXDATE;TZID=Europe/London` value (or one specifying no
+    /// `TZID` at all) names a different wall-clock instant than intended,
+    /// even though both are DATE-TIME. Checked once per `EXDATE` property
+    /// occurrence (the `TZID` parameter applies once to the whole
+    /// comma-separated value list).
+    pub(crate) fn cmp_exdate_tzid(
+        &self,
+        exdate: &[ExceptionDateTimes],
+    ) -> Result<(), ComponentError> {
+        let matches_tzid = exdate.iter().all(|e| e.tzid() == self.tzid());
+        if matches_tzid {
+            Ok(())
+        } else {
+            Err(ComponentError::MismatchedTzid("EXDATE", "DTSTART"))
+        }
+    }
+
+    /// RFC 5545 §3.8.5.2 requires `RDATE`'s value type to match `DTSTART`'s
+    /// (or be `PERIOD`); real-world producers extend that to expecting the
+    /// same `TZID` too when both are DATE-TIME (see [`Self::cmp_exdate_tzid`]).
+    pub(crate) fn cmp_rdate_tzid(
+        &self,
+        rdate: &[RecurrenceDateTimes],
+    ) -> Result<(), ComponentError> {
+        let matches_tzid = rdate.iter().all(|r| r.tzid() == self.tzid());
+        if matches_tzid {
+            Ok(())
+        } else {
+            Err(ComponentError::MismatchedTzid("RDATE", "DTSTART"))
+        }
     }
 }
 

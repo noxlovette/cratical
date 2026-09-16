@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 pub(crate) mod ast;
+pub use ast::ComponentError;
 mod calendar;
 pub use calendar::{Calendar, CalendarParseError, Component};
 /// As specified [in the RFC Section 3.6](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6)
