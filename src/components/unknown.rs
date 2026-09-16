@@ -35,6 +35,23 @@ pub struct UnknownComponent {
 }
 
 impl UnknownComponent {
+    /// Constructs an `UnknownComponent` directly from its raw parts.
+    /// RFC 5545 imposes no rules on an unrecognized component's contents
+    /// (see this type's own docs), so unlike every other component in
+    /// this crate, there's no builder — nothing to validate, and every
+    /// field is required.
+    pub fn new(
+        name: String,
+        lines: Vec<String>,
+        components: Vec<UnknownComponent>,
+    ) -> Self {
+        Self {
+            name,
+            lines,
+            components,
+        }
+    }
+
     /// The component's name (`iana-token` or `x-name`), exactly as it
     /// appeared after `BEGIN:`/`END:`.
     pub fn name(&self) -> &str {
@@ -64,5 +81,24 @@ impl std::fmt::Display for UnknownComponent {
         }
         crate::components::write_components(f, &self.components)?;
         write!(f, "END:{}\r\n", self.name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_round_trips_a_minimal_unknown_component() {
+        let component = UnknownComponent::new(
+            "X-MY-COMPONENT".into(),
+            vec!["X-MY-PROPERTY:some value".into()],
+            Vec::new(),
+        );
+        assert_eq!(
+            component.to_string(),
+            "BEGIN:X-MY-COMPONENT\r\nX-MY-PROPERTY:some \
+             value\r\nEND:X-MY-COMPONENT\r\n"
+        );
     }
 }

@@ -28,6 +28,92 @@ pub struct Attendee {
 
 impl_try_from_bytes!(Attendee, CalendarUserAddress, AttendeeParams);
 
+/// Builder for [`Attendee`].
+#[derive(Debug)]
+pub struct AttendeeBuilder {
+    value: CalendarUserAddress,
+    params: AttendeeParams,
+}
+
+impl AttendeeBuilder {
+    /// Starts a new builder from the attendee's required calendar user
+    /// address.
+    pub fn new(value: CalendarUserAddress) -> Self {
+        Self {
+            value,
+            params: AttendeeParams::default(),
+        }
+    }
+
+    /// Sets the `LANGUAGE` parameter.
+    pub fn language(mut self, v: Language) -> Self {
+        self.params.language = Some(v);
+        self
+    }
+
+    /// Sets the `CUTYPE` parameter.
+    pub fn calendar_user_type(mut self, v: CalendarUserType) -> Self {
+        self.params.calendar_user_type = Some(v);
+        self
+    }
+
+    /// Sets the `MEMBER` parameter.
+    pub fn member(mut self, v: Member) -> Self {
+        self.params.member = Some(v);
+        self
+    }
+
+    /// Sets the `PARTSTAT` parameter.
+    pub fn status(mut self, v: ParticipationStatus) -> Self {
+        self.params.status = Some(v);
+        self
+    }
+
+    /// Sets the `RSVP` parameter.
+    pub fn rsvp(mut self, v: Rsvp) -> Self {
+        self.params.rsvp = Some(v);
+        self
+    }
+
+    /// Sets the `DELEGATED-TO` parameter.
+    pub fn delegatees(mut self, v: Delegatees) -> Self {
+        self.params.deletegatee = Some(v);
+        self
+    }
+
+    /// Sets the `DELEGATED-FROM` parameter.
+    pub fn delegators(mut self, v: Delegators) -> Self {
+        self.params.delegator = Some(v);
+        self
+    }
+
+    /// Sets the `SENT-BY` parameter.
+    pub fn sent_by(mut self, v: SentBy) -> Self {
+        self.params.sent_by = Some(v);
+        self
+    }
+
+    /// Sets the `CN` parameter.
+    pub fn common_name(mut self, v: CommonName) -> Self {
+        self.params.common_name = Some(v);
+        self
+    }
+
+    /// Sets the `DIR` parameter.
+    pub fn directory(mut self, v: DirectoryEntryReference) -> Self {
+        self.params.directory = Some(v);
+        self
+    }
+
+    /// Finishes the builder, producing an [`Attendee`].
+    pub fn build(self) -> Attendee {
+        Attendee {
+            value: self.value,
+            params: self.params,
+        }
+    }
+}
+
 impl std::fmt::Display for Attendee {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ATTENDEE{}:{}", self.params, self.value)
@@ -145,6 +231,7 @@ pub struct Contact {
 }
 
 impl_try_from_bytes!(Contact, Text, AltrepLanguageParams);
+impl_altrep_language_builder!(ContactBuilder, Contact, Text);
 
 impl std::fmt::Display for Contact {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -166,6 +253,56 @@ pub struct Organizer {
 }
 
 impl_try_from_bytes!(Organizer, CalendarUserAddress, OrgParams);
+
+/// Builder for [`Organizer`].
+#[derive(Debug)]
+pub struct OrganizerBuilder {
+    value: CalendarUserAddress,
+    params: OrgParams,
+}
+
+impl OrganizerBuilder {
+    /// Starts a new builder from the organizer's required calendar user
+    /// address.
+    pub fn new(value: CalendarUserAddress) -> Self {
+        Self {
+            value,
+            params: OrgParams::default(),
+        }
+    }
+
+    /// Sets the `LANGUAGE` parameter.
+    pub fn language(mut self, v: Language) -> Self {
+        self.params.language = Some(v);
+        self
+    }
+
+    /// Sets the `CN` parameter.
+    pub fn common_name(mut self, v: CommonName) -> Self {
+        self.params.common_name = Some(v);
+        self
+    }
+
+    /// Sets the `DIR` parameter.
+    pub fn directory(mut self, v: DirectoryEntryReference) -> Self {
+        self.params.directory = Some(v);
+        self
+    }
+
+    /// Sets the `SENT-BY` parameter.
+    pub fn sent_by(mut self, v: SentBy) -> Self {
+        self.params.sent_by = Some(v);
+        self
+    }
+
+    /// Finishes the builder, producing an [`Organizer`].
+    pub fn build(self) -> Organizer {
+        Organizer {
+            value: self.value,
+            params: self.params,
+        }
+    }
+}
 
 impl std::fmt::Display for Organizer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -255,6 +392,54 @@ impl TryFrom<&[u8]> for RecurrenceId {
     }
 }
 
+/// Builder for [`RecurrenceId`].
+#[derive(Debug)]
+pub struct RecurrenceIdBuilder {
+    value: DateOrDatetime,
+    tzid: Option<TimeZoneIdentifier>,
+    recurrence: Option<RecurrenceIdentifierRange>,
+}
+
+impl RecurrenceIdBuilder {
+    /// Starts a new builder from the property's required value.
+    pub fn new(value: DateOrDatetime) -> Self {
+        Self {
+            value,
+            tzid: None,
+            recurrence: None,
+        }
+    }
+
+    /// Sets the `TZID` parameter, resolving a floating `DATE-TIME` value
+    /// against it (RFC 5545 §3.3.5). Has no effect on a `DATE` value.
+    pub fn tzid(mut self, tzid: TimeZoneIdentifier) -> Self {
+        self.tzid = Some(tzid);
+        self
+    }
+
+    /// Sets the `RANGE` parameter.
+    pub fn range(mut self, range: RecurrenceIdentifierRange) -> Self {
+        self.recurrence = Some(range);
+        self
+    }
+
+    /// Finishes the builder, producing a [`RecurrenceId`].
+    pub fn build(self) -> RecurrenceId {
+        let value = self.value.resolve_tzid(self.tzid.as_ref());
+        let data_type = matches!(value, DateOrDatetime::Date(_))
+            .then_some(ValueDataType::Date);
+        RecurrenceId {
+            value,
+            params: RecurrenceParams {
+                shared: SharedParams::default(),
+                data_type,
+                tzid: self.tzid,
+                recurrence: self.recurrence,
+            },
+        }
+    }
+}
+
 impl RecurrenceId {
     /// The parsed `RECURRENCE-ID` value — used by the calendar-wide check
     /// that flags two components sharing the same `UID` and `RECURRENCE-ID`
@@ -336,6 +521,20 @@ pub struct RelatedTo {
 
 impl_try_from_bytes!(RelatedTo, Text, RelatedToParams);
 
+impl RelatedTo {
+    /// Constructs a new `RELATED-TO` property from its value and an
+    /// optional `RELTYPE` parameter.
+    pub fn new(value: Text, rt: Option<RelationshipType>) -> Self {
+        Self {
+            value,
+            params: RelatedToParams {
+                shared: SharedParams::default(),
+                rt,
+            },
+        }
+    }
+}
+
 impl std::fmt::Display for RelatedTo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "RELATED-TO{}:{}", self.params, self.value)
@@ -391,6 +590,7 @@ pub struct UniformResourceLocator {
 }
 
 impl_try_from_bytes!(UniformResourceLocator, Uri);
+impl_simple_property!(UniformResourceLocator, Uri);
 
 impl std::fmt::Display for UniformResourceLocator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -418,6 +618,7 @@ pub struct Uid {
 }
 
 impl_try_from_bytes!(Uid);
+impl_simple_property!(Uid, Text);
 
 impl Uid {
     /// The `UID` text — used by the calendar-wide check that flags two
@@ -628,6 +829,94 @@ mod tests {
         assert_eq!(
             organizer.to_string(),
             "ORGANIZER;CN=John Smith:mailto:jsmith@example.com"
+        );
+    }
+
+    fn cal_address(s: &str) -> CalendarUserAddress {
+        CalendarUserAddress::new(Uri::parse(s).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn attendee_builder_round_trips_the_content_line() {
+        let attendee =
+            AttendeeBuilder::new(cal_address("mailto:jdoe@example.com"))
+                .status(crate::params::ParticipationStatus::Event(
+                    crate::params::PartStatEvent::Accepted,
+                ))
+                .common_name(crate::params::CommonName::new("Jane Doe".into()))
+                .build();
+        assert_eq!(
+            attendee.to_string(),
+            "ATTENDEE;PARTSTAT=ACCEPTED;CN=Jane Doe:mailto:jdoe@example.com"
+        );
+    }
+
+    #[test]
+    fn organizer_builder_round_trips_the_content_line() {
+        let organizer =
+            OrganizerBuilder::new(cal_address("mailto:jsmith@example.com"))
+                .common_name(crate::params::CommonName::new(
+                    "John Smith".into(),
+                ))
+                .build();
+        assert_eq!(
+            organizer.to_string(),
+            "ORGANIZER;CN=John Smith:mailto:jsmith@example.com"
+        );
+    }
+
+    #[test]
+    fn recurrence_id_builder_sets_value_date_and_range() {
+        let date =
+            crate::values::Date::try_from(b"19960401".as_slice()).unwrap();
+        let recurrence_id =
+            RecurrenceIdBuilder::new(DateOrDatetime::Date(date))
+                .range(crate::params::RecurrenceIdentifierRange::ThisAndFuture)
+                .build();
+        assert_eq!(
+            recurrence_id.to_string(),
+            "RECURRENCE-ID;VALUE=DATE;RANGE=THISANDFUTURE:19960401"
+        );
+    }
+
+    #[test]
+    fn contact_builder_round_trips() {
+        let contact = ContactBuilder::new(
+            "Jim Dolittle, ABC Industries, +1-919-555-1234".into(),
+        )
+        .build();
+        assert_eq!(
+            contact.to_string(),
+            "CONTACT:Jim Dolittle\\, ABC Industries\\, +1-919-555-1234"
+        );
+    }
+
+    #[test]
+    fn related_to_new_matches_the_parsed_equivalent() {
+        let related = RelatedTo::new(
+            "jsmith.part7.19960817T083000.xyzMail@example.com".into(),
+            None,
+        );
+        assert_eq!(
+            related.to_string(),
+            "RELATED-TO:jsmith.part7.19960817T083000.xyzMail@example.com"
+        );
+    }
+
+    #[test]
+    fn url_and_uid_new_match_the_parsed_equivalent() {
+        assert_eq!(
+            UniformResourceLocator::new(
+                Uri::parse("http://example.com/pub/busy/jpublic-01.ifb")
+                    .unwrap()
+            )
+            .to_string(),
+            "URL:http://example.com/pub/busy/jpublic-01.ifb"
+        );
+        assert_eq!(
+            Uid::new("19960401T080045Z-4000F192713-0052@example.com".into())
+                .to_string(),
+            "UID:19960401T080045Z-4000F192713-0052@example.com"
         );
     }
 }

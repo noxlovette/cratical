@@ -21,6 +21,7 @@ pub struct BusyType {
 }
 
 impl_try_from_bytes!(BusyType, BusyTypeEnum);
+impl_simple_property!(BusyType, BusyTypeEnum);
 
 impl std::fmt::Display for BusyType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -28,10 +29,14 @@ impl std::fmt::Display for BusyType {
     }
 }
 
+/// The `BUSYTYPE` value.
 #[derive(Debug)]
-enum BusyTypeEnum {
+pub enum BusyTypeEnum {
+    /// Busy.
     Busy,
+    /// Busy and unavailable.
     BusyUnavailable,
+    /// Tentatively busy.
     BusyTentative,
     /// An IANA-registered busy type.
     Iana(Text),
@@ -91,5 +96,13 @@ mod tests {
 
         let iana = BusyType::try_from(b":SOME-IANA-VALUE".as_slice()).unwrap();
         assert_eq!(iana.to_string(), "BUSYTYPE:SOME-IANA-VALUE");
+    }
+
+    #[test]
+    fn busy_type_new_matches_the_parsed_equivalent() {
+        assert_eq!(
+            BusyType::new(BusyTypeEnum::BusyTentative).to_string(),
+            "BUSYTYPE:BUSY-TENTATIVE"
+        );
     }
 }

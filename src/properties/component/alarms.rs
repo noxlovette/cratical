@@ -35,6 +35,7 @@ pub enum ActionEnum {
 }
 
 impl_try_from_bytes!(Action, ActionEnum);
+impl_simple_property!(Action, ActionEnum);
 
 impl std::fmt::Display for Action {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -97,6 +98,7 @@ pub struct Repeat {
 }
 
 impl_try_from_bytes!(Repeat, Integer);
+impl_simple_property!(Repeat, Integer);
 
 impl std::fmt::Display for Repeat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -161,6 +163,62 @@ impl TryFrom<&[u8]> for TriggerParams {
     }
 }
 
+/// Builder for [`Trigger`].
+#[derive(Debug)]
+pub struct TriggerBuilder {
+    value: DateTimeDuration,
+    tzid: Option<TimeZoneIdentifier>,
+    trigger_relationship: Option<AlarmTriggerRelationship>,
+}
+
+impl TriggerBuilder {
+    /// Starts a new builder from the trigger's required value.
+    pub fn new(value: DateTimeDuration) -> Self {
+        Self {
+            value,
+            tzid: None,
+            trigger_relationship: None,
+        }
+    }
+
+    /// Sets the `TZID` parameter, resolving a floating `DATE-TIME` value
+    /// against it (RFC 5545 §3.3.5). Has no effect on a `DURATION` value.
+    pub fn tzid(mut self, tzid: TimeZoneIdentifier) -> Self {
+        self.tzid = Some(tzid);
+        self
+    }
+
+    /// Sets the `RELATED` parameter.
+    pub fn related(mut self, related: AlarmTriggerRelationship) -> Self {
+        self.trigger_relationship = Some(related);
+        self
+    }
+
+    /// Finishes the builder, producing a [`Trigger`].
+    pub fn build(self) -> Trigger {
+        let value = match self.value {
+            DateTimeDuration::DateTime(dt) => {
+                DateTimeDuration::DateTime(match self.tzid.as_ref() {
+                    Some(tzid) => dt.resolve_tz(tzid.tz()),
+                    None => dt,
+                })
+            }
+            duration @ DateTimeDuration::Duration(_) => duration,
+        };
+        let value_data_type = matches!(value, DateTimeDuration::DateTime(_))
+            .then_some(ValueDataType::DateTime);
+        Trigger {
+            value,
+            params: TriggerParams {
+                shared: SharedParams::default(),
+                value_data_type,
+                tz_identifier: self.tzid,
+                trigger_relationship: self.trigger_relationship,
+            },
+        }
+    }
+}
+
 impl std::fmt::Display for TriggerParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(v) = &self.value_data_type {
@@ -206,5 +264,41 @@ mod tests {
             ActionEnum::try_from(b"PROCEDURE".as_slice()),
             Ok(ActionEnum::Iana(_))
         ));
+    }
+
+    #[test]
+    fn action_new_matches_the_parsed_equivalent() {
+        assert_eq!(Action::new(ActionEnum::Audio).to_string(), "ACTION:AUDIO");
+    }
+
+    #[test]
+    fn repeat_new_matches_the_parsed_equivalent() {
+        assert_eq!(
+            Repeat::new(Integer::new(4)).to_string(),
+            Repeat::try_from(b":4".as_slice()).unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn trigger_builder_defaults_to_a_bare_duration() {
+        let duration =
+            crate::values::Duration::new(chrono::Duration::minutes(-15));
+        let trigger =
+            TriggerBuilder::new(DateTimeDuration::Duration(duration)).build();
+        assert_eq!(trigger.to_string(), "TRIGGER:-PT15M");
+    }
+
+    #[test]
+    fn trigger_builder_sets_value_date_time_and_related_for_a_datetime() {
+        let dt =
+            crate::values::DateTime::try_from(b"19980101T050000Z".as_slice())
+                .unwrap();
+        let trigger = TriggerBuilder::new(DateTimeDuration::DateTime(dt))
+            .related(AlarmTriggerRelationship::End)
+            .build();
+        assert_eq!(
+            trigger.to_string(),
+            "TRIGGER;VALUE=DATE-TIME;RELATED=END:19980101T050000Z"
+        );
     }
 }

@@ -123,3 +123,119 @@ impl std::fmt::Display for VLocation {
         write!(f, "END:VLOCATION\r\n")
     }
 }
+
+/// Builder for [`VLocation`]. RFC 9073 §7.2 places no cross-field rules on
+/// `VLOCATION` beyond `UID` being required, so unlike most of this
+/// module's other builders, this one is infallible — there's nothing left
+/// to validate in [`Self::build`].
+#[derive(Debug)]
+pub struct VLocationBuilder {
+    uid: Uid,
+    name: Option<Name>,
+    description: Option<Description>,
+    geo: Option<Geo>,
+    loctype: Option<LocationType>,
+    url: Option<UniformResourceLocator>,
+    xprop: Vec<Xprop>,
+    iana: Vec<Iana>,
+}
+
+impl VLocationBuilder {
+    /// Starts building a `VLOCATION` from its one required property,
+    /// `UID` (RFC 9073 §7.2).
+    pub fn new(uid: Uid) -> Self {
+        Self {
+            uid,
+            name: None,
+            description: None,
+            geo: None,
+            loctype: None,
+            url: None,
+            xprop: Vec::new(),
+            iana: Vec::new(),
+        }
+    }
+
+    /// Sets `NAME`.
+    pub fn name(mut self, v: Name) -> Self {
+        self.name = Some(v);
+        self
+    }
+
+    /// Sets `DESCRIPTION`.
+    pub fn description(mut self, v: Description) -> Self {
+        self.description = Some(v);
+        self
+    }
+
+    /// Sets `GEO`.
+    pub fn geo(mut self, v: Geo) -> Self {
+        self.geo = Some(v);
+        self
+    }
+
+    /// Sets `LOCATION-TYPE`.
+    pub fn loctype(mut self, v: LocationType) -> Self {
+        self.loctype = Some(v);
+        self
+    }
+
+    /// Sets `URL`. See [`VLocation`]'s own docs for why this crate models
+    /// it, despite it being absent from RFC 9073's formal `locprop`
+    /// grammar.
+    pub fn url(mut self, v: UniformResourceLocator) -> Self {
+        self.url = Some(v);
+        self
+    }
+
+    /// Adds a non-standard (`X-`) property.
+    pub fn xprop(mut self, v: Xprop) -> Self {
+        self.xprop.push(v);
+        self
+    }
+
+    /// Adds an IANA-registered property this crate doesn't otherwise model.
+    pub fn iana(mut self, v: Iana) -> Self {
+        self.iana.push(v);
+        self
+    }
+
+    /// Assembles the finished [`VLocation`].
+    pub fn build(self) -> VLocation {
+        VLocation {
+            uid: self.uid,
+            name: self.name,
+            description: self.description,
+            geo: self.geo,
+            loctype: self.loctype,
+            url: self.url,
+            xprop: self.xprop,
+            iana: self.iana,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vlocation_builder_round_trips_a_minimal_vlocation() {
+        let vlocation =
+            VLocationBuilder::new(Uid::new("123456-abcdef-98765432".into()))
+                .name(
+                    crate::properties::NameBuilder::new("Office".into())
+                        .build(),
+                )
+                .url(UniformResourceLocator::new(
+                    crate::values::Uri::parse("geo:40.443,-79.945;u=10")
+                        .unwrap(),
+                ))
+                .build();
+        assert_eq!(
+            vlocation.to_string(),
+            "BEGIN:VLOCATION\r\nUID:123456-abcdef-98765432\r\nNAME:Office\r\\
+             nURL:geo:40.443,-79.945;u=10\r\nEND:VLOCATION\r\n"
+        );
+    }
+}

@@ -1,4 +1,5 @@
 use crate::{
+    ast::ComponentError,
     components::write_lines,
     properties::{
         Attendee, Comment, Contact, DateTimeEnd, DateTimeStamp, DateTimeStart,
@@ -198,5 +199,191 @@ impl std::fmt::Display for FreeBusy {
         write_lines(f, &self.xprop)?;
         write_lines(f, &self.iana)?;
         write!(f, "END:VFREEBUSY\r\n")
+    }
+}
+
+/// Builder for [`FreeBusy`]. RFC 5545 §3.6.4 requires nothing on
+/// `VFREEBUSY` unconditionally — every field is optional, so unlike most
+/// of this module's other builders, [`Self::new`] takes no arguments. The
+/// one cross-field rule (`DTEND`'s value type matching `DTSTART`'s) can't
+/// be resolved until the actual property values are known, so it stays a
+/// runtime check in [`Self::build`].
+#[derive(Debug, Default)]
+pub struct FreeBusyBuilder {
+    dtstamp: Option<DateTimeStamp>,
+    uid: Option<Uid>,
+    contact: Option<Contact>,
+    dtstart: Option<DateTimeStart>,
+    dtend: Option<DateTimeEnd>,
+    organizer: Option<Organizer>,
+    url: Option<UniformResourceLocator>,
+    attendee: Vec<Attendee>,
+    comment: Vec<Comment>,
+    freebusy: Vec<FreeBusyTime>,
+    rstatus: Vec<RequestStatus>,
+    xprop: Vec<Xprop>,
+    iana: Vec<Iana>,
+}
+
+impl FreeBusyBuilder {
+    /// Starts building an empty `VFREEBUSY`.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets `DTSTAMP`.
+    pub fn dtstamp(mut self, v: DateTimeStamp) -> Self {
+        self.dtstamp = Some(v);
+        self
+    }
+
+    /// Sets `UID`.
+    pub fn uid(mut self, v: Uid) -> Self {
+        self.uid = Some(v);
+        self
+    }
+
+    /// Sets `CONTACT`.
+    pub fn contact(mut self, v: Contact) -> Self {
+        self.contact = Some(v);
+        self
+    }
+
+    /// Sets `DTSTART`.
+    pub fn dtstart(mut self, v: DateTimeStart) -> Self {
+        self.dtstart = Some(v);
+        self
+    }
+
+    /// Sets `DTEND`.
+    pub fn dtend(mut self, v: DateTimeEnd) -> Self {
+        self.dtend = Some(v);
+        self
+    }
+
+    /// Sets `ORGANIZER`.
+    pub fn organizer(mut self, v: Organizer) -> Self {
+        self.organizer = Some(v);
+        self
+    }
+
+    /// Sets `URL`.
+    pub fn url(mut self, v: UniformResourceLocator) -> Self {
+        self.url = Some(v);
+        self
+    }
+
+    /// Adds an `ATTENDEE` property.
+    pub fn attendee(mut self, v: Attendee) -> Self {
+        self.attendee.push(v);
+        self
+    }
+
+    /// Adds a `COMMENT` property.
+    pub fn comment(mut self, v: Comment) -> Self {
+        self.comment.push(v);
+        self
+    }
+
+    /// Adds a `FREEBUSY` property.
+    pub fn freebusy(mut self, v: FreeBusyTime) -> Self {
+        self.freebusy.push(v);
+        self
+    }
+
+    /// Adds a `REQUEST-STATUS` property.
+    pub fn rstatus(mut self, v: RequestStatus) -> Self {
+        self.rstatus.push(v);
+        self
+    }
+
+    /// Adds a non-standard (`X-`) property.
+    pub fn xprop(mut self, v: Xprop) -> Self {
+        self.xprop.push(v);
+        self
+    }
+
+    /// Adds an IANA-registered property this crate doesn't otherwise model.
+    pub fn iana(mut self, v: Iana) -> Self {
+        self.iana.push(v);
+        self
+    }
+
+    /// Validates the cross-field rule RFC 5545 §3.6.4 places on
+    /// `VFREEBUSY` and assembles the finished [`FreeBusy`].
+    pub fn build(self) -> Result<FreeBusy, ComponentError> {
+        if let Some(dtstart) = self.dtstart.as_ref() {
+            dtstart.cmp_value_type(
+                self.dtend.as_ref().map(DateTimeEnd::value),
+                "DTEND",
+            )?;
+        }
+
+        Ok(FreeBusy {
+            dtstamp: self.dtstamp,
+            uid: self.uid,
+            contact: self.contact,
+            dtstart: self.dtstart,
+            dtend: self.dtend,
+            organizer: self.organizer,
+            url: self.url,
+            attendee: self.attendee,
+            comment: self.comment,
+            freebusy: self.freebusy,
+            rstatus: self.rstatus,
+            xprop: self.xprop,
+            iana: self.iana,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn free_busy_builder_round_trips_a_minimal_free_busy() {
+        let free_busy = FreeBusyBuilder::new()
+            .uid(Uid::new("19970901T082949Z-FA43EF@example.com".into()))
+            .build()
+            .unwrap();
+        assert_eq!(
+            free_busy.to_string(),
+            "BEGIN:VFREEBUSY\r\nUID:19970901T082949Z-FA43EF@example.com\r\\
+             nEND:VFREEBUSY\r\n"
+        );
+    }
+
+    #[test]
+    fn free_busy_builder_rejects_a_mismatched_dtend_value_type() {
+        let dtstart = crate::properties::DateTimeStartBuilder::new(
+            crate::values::DateOrDatetime::DateTime(
+                crate::values::DateTime::Utc(
+                    chrono::TimeZone::with_ymd_and_hms(
+                        &chrono::Utc,
+                        1997,
+                        10,
+                        15,
+                        5,
+                        0,
+                        0,
+                    )
+                    .unwrap(),
+                ),
+            ),
+        )
+        .build();
+        let dtend = crate::properties::DateTimeEndBuilder::new(
+            crate::values::DateOrDatetime::Date(
+                crate::values::Date::try_from(b"19971016".as_slice()).unwrap(),
+            ),
+        )
+        .build();
+        let result =
+            FreeBusyBuilder::new().dtstart(dtstart).dtend(dtend).build();
+        assert!(matches!(
+            result,
+            Err(ComponentError::MismatchedValueType("DTEND", "DTSTART"))
+        ));
     }
 }

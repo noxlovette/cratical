@@ -84,6 +84,11 @@ impl_try_from_bytes!(Version);
 impl_try_from_bytes!(Method);
 impl_try_from_bytes!(CalendarScale);
 
+impl_simple_property!(ProductIdentifier, Text);
+impl_simple_property!(Version, Text);
+impl_simple_property!(Method, Text);
+impl_simple_property!(CalendarScale, Text);
+
 impl std::fmt::Display for CalendarScale {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "CALSCALE{}:{}", self.params, self.value)
@@ -105,5 +110,36 @@ impl std::fmt::Display for ProductIdentifier {
 impl std::fmt::Display for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "VERSION{}:{}", self.params, self.value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_constructors_match_their_parsed_equivalent() {
+        assert_eq!(
+            CalendarScale::new("GREGORIAN".into()).to_string(),
+            CalendarScale::try_from(b":GREGORIAN".as_slice())
+                .unwrap()
+                .to_string()
+        );
+        assert_eq!(
+            Method::new("REQUEST".into()).to_string(),
+            Method::try_from(b":REQUEST".as_slice())
+                .unwrap()
+                .to_string()
+        );
+        assert_eq!(
+            ProductIdentifier::new("-//ABC//EN".into()).to_string(),
+            ProductIdentifier::try_from(b":-//ABC//EN".as_slice())
+                .unwrap()
+                .to_string()
+        );
+        assert_eq!(
+            Version::new("2.0".into()).to_string(),
+            Version::try_from(b":2.0".as_slice()).unwrap().to_string()
+        );
     }
 }

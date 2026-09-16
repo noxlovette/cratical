@@ -12,7 +12,7 @@ use chrono::{
     Utc,
 };
 use chrono_tz::Tz;
-pub use recurrence::Recur;
+pub use recurrence::{Frequency, Recur, RecurBuilder, Weekday};
 use std::{ops::Deref, str::from_utf8};
 use thiserror::Error;
 use url::Url;
@@ -257,6 +257,15 @@ impl TryFrom<&[u8]> for Duration {
     }
 }
 
+impl Duration {
+    /// Builds a `DURATION` value directly from an already-valid
+    /// [`ChronoDuration`], skipping the ISO 8601 text round-trip
+    /// `TryFrom<&[u8]>` requires.
+    pub fn new(duration: ChronoDuration) -> Self {
+        Self(duration)
+    }
+}
+
 /// If the property permits, multiple "DATE-TIME" values
 /// are specified as a COMMA-separated list of values.  No additional
 /// content value encoding (i.e., BACKSLASH character encoding, see
@@ -467,6 +476,14 @@ impl TryFrom<&[u8]> for Date {
     }
 }
 
+impl Date {
+    /// Builds a `DATE` value directly from an already-valid [`NaiveDate`],
+    /// skipping the ISO 8601 text round-trip `TryFrom<&[u8]>` requires.
+    pub fn new(date: NaiveDate) -> Self {
+        Self(date)
+    }
+}
+
 /// The PLUS SIGN character MUST be specified for positive
 /// UTC offsets (i.e., ahead of UTC).  The HYPHEN-MINUS character MUST
 /// be specified for negative UTC offsets (i.e., behind of UTC).  The
@@ -527,6 +544,16 @@ impl TryFrom<&[u8]> for UtcOffset {
         FixedOffset::east_opt(total)
             .map(Self)
             .ok_or(ValueError::UtcOffset)
+    }
+}
+
+impl UtcOffset {
+    /// Builds a `UTC-OFFSET` value directly from an already-valid
+    /// [`FixedOffset`]. The `"-0000"`/`"-000000"` restriction the text
+    /// grammar imposes doesn't apply here — a zero `FixedOffset` has no
+    /// sign to be malformed.
+    pub fn new(offset: FixedOffset) -> Self {
+        Self(offset)
     }
 }
 
@@ -748,6 +775,14 @@ impl TryFrom<&[u8]> for Binary {
     }
 }
 
+impl Binary {
+    /// Builds a `BINARY` value directly from already-decoded bytes,
+    /// skipping the BASE64 text round-trip `TryFrom<&[u8]>` requires.
+    pub fn new(data: Vec<u8>) -> Self {
+        Self(data)
+    }
+}
+
 /// These values are case-insensitive text.  No additional
 /// content value encoding (i.e., BACKSLASH character encoding, see
 /// [Section 3.3.11](https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.11))
@@ -756,6 +791,14 @@ impl TryFrom<&[u8]> for Binary {
 /// [Section 3.3.2](https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.2)
 #[derive(Debug)]
 pub struct Boolean(bool);
+
+impl Boolean {
+    /// Builds a `BOOLEAN` value directly from a native `bool`, skipping the
+    /// `"TRUE"`/`"FALSE"` text round-trip `TryFrom<&[u8]>` requires.
+    pub fn new(value: bool) -> Self {
+        Self(value)
+    }
+}
 
 /// If the property permits, multiple TEXT values are
 /// specified by a COMMA-separated list of values.
@@ -842,6 +885,15 @@ impl TryFrom<&[u8]> for Integer {
     }
 }
 
+impl Integer {
+    /// Builds an `INTEGER` value directly from a native `i32`, skipping the
+    /// text round-trip `TryFrom<&[u8]>` requires. The full `i32` range is
+    /// valid per RFC 5545 §3.3.8, so this is infallible.
+    pub fn new(value: i32) -> Self {
+        Self(value)
+    }
+}
+
 /// If the property permits, multiple "float" values are
 /// specified by a COMMA-separated list of values.
 ///
@@ -862,6 +914,14 @@ impl TryFrom<&[u8]> for Float {
 
     fn try_from(v: &[u8]) -> Result<Self, Self::Error> {
         Ok(Self(from_utf8(v)?.parse()?))
+    }
+}
+
+impl Float {
+    /// Builds a `FLOAT` value directly from a native `f64`, skipping the
+    /// text round-trip `TryFrom<&[u8]>` requires.
+    pub fn new(value: f64) -> Self {
+        Self(value)
     }
 }
 /// The value is a URI as defined by [RFC3986] or any other
@@ -912,15 +972,22 @@ mod recurrence {
     type SetPosDay = YearDayNum;
 
     /// Day of the week
-    #[derive(Debug, Clone, Default)]
-    enum Weekday {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub enum Weekday {
+        /// Sunday.
         Su,
+        /// Monday.
         #[default]
         Mo,
+        /// Tuesday.
         Tu,
+        /// Wednesday.
         We,
+        /// Thursday.
         Th,
+        /// Friday.
         Fr,
+        /// Saturday.
         Sa,
     }
 
@@ -1092,6 +1159,258 @@ mod recurrence {
         }
     }
 
+    /// A fluent, validating builder for [`Recur`]. The `RECUR` grammar (RFC
+    /// 5545 §3.3.10) has one required rule part (`FREQ`), a `UNTIL`/`COUNT`
+    /// mutual exclusion, and eight independent `BYxxx` list rule parts each
+    /// with their own numeric range — and every one of `Recur`'s own field
+    /// and helper types is private to this module, so this builder is the
+    /// only way to construct a `Recur` without going through the ISO 8601
+    /// text grammar `TryFrom<&[u8]>` parses.
+    #[derive(Debug, Clone)]
+    pub struct RecurBuilder {
+        freq: Frequency,
+        until: Option<DateOrDatetime>,
+        count: Option<i32>,
+        interval: Option<i32>,
+        by_second: Vec<i32>,
+        by_minute: Vec<i32>,
+        by_hour: Vec<i32>,
+        by_day: Vec<(Option<i8>, Weekday)>,
+        by_month_day: Vec<i32>,
+        by_year_day: Vec<i32>,
+        by_week_no: Vec<i32>,
+        by_month: Vec<i32>,
+        by_set_pos: Vec<i32>,
+        wkst: Option<Weekday>,
+    }
+
+    impl RecurBuilder {
+        /// Starts a new builder with the required `FREQ` rule part.
+        pub fn new(freq: Frequency) -> Self {
+            Self {
+                freq,
+                until: None,
+                count: None,
+                interval: None,
+                by_second: Vec::new(),
+                by_minute: Vec::new(),
+                by_hour: Vec::new(),
+                by_day: Vec::new(),
+                by_month_day: Vec::new(),
+                by_year_day: Vec::new(),
+                by_week_no: Vec::new(),
+                by_month: Vec::new(),
+                by_set_pos: Vec::new(),
+                wkst: None,
+            }
+        }
+
+        /// Sets the `UNTIL` rule part. Mutually exclusive with
+        /// [`count`](Self::count) — [`build`](Self::build) rejects both
+        /// being set (RFC 5545 §3.3.10).
+        pub fn until(mut self, until: DateOrDatetime) -> Self {
+            self.until = Some(until);
+            self
+        }
+
+        /// Sets the `COUNT` rule part. Mutually exclusive with
+        /// [`until`](Self::until).
+        pub fn count(mut self, count: i32) -> Self {
+            self.count = Some(count);
+            self
+        }
+
+        /// Sets the `INTERVAL` rule part. Must be at least 1 — checked at
+        /// [`build`](Self::build).
+        pub fn interval(mut self, interval: i32) -> Self {
+            self.interval = Some(interval);
+            self
+        }
+
+        /// Sets the `BYSECOND` rule part. Valid values: 0 to 60.
+        pub fn by_second(
+            mut self,
+            values: impl IntoIterator<Item = i32>,
+        ) -> Self {
+            self.by_second = values.into_iter().collect();
+            self
+        }
+
+        /// Sets the `BYMINUTE` rule part. Valid values: 0 to 59.
+        pub fn by_minute(
+            mut self,
+            values: impl IntoIterator<Item = i32>,
+        ) -> Self {
+            self.by_minute = values.into_iter().collect();
+            self
+        }
+
+        /// Sets the `BYHOUR` rule part. Valid values: 0 to 23.
+        pub fn by_hour(
+            mut self,
+            values: impl IntoIterator<Item = i32>,
+        ) -> Self {
+            self.by_hour = values.into_iter().collect();
+            self
+        }
+
+        /// Sets the `BYDAY` rule part: each entry is an optional signed
+        /// ordinal (e.g. `Some(-1)` for "last") paired with a weekday.
+        pub fn by_day(
+            mut self,
+            values: impl IntoIterator<Item = (Option<i8>, Weekday)>,
+        ) -> Self {
+            self.by_day = values.into_iter().collect();
+            self
+        }
+
+        /// Sets the `BYMONTHDAY` rule part. Valid values: 1 to 31 or -31
+        /// to -1.
+        pub fn by_month_day(
+            mut self,
+            values: impl IntoIterator<Item = i32>,
+        ) -> Self {
+            self.by_month_day = values.into_iter().collect();
+            self
+        }
+
+        /// Sets the `BYYEARDAY` rule part. Valid values: 1 to 366 or -366
+        /// to -1.
+        pub fn by_year_day(
+            mut self,
+            values: impl IntoIterator<Item = i32>,
+        ) -> Self {
+            self.by_year_day = values.into_iter().collect();
+            self
+        }
+
+        /// Sets the `BYWEEKNO` rule part. Valid values: 1 to 53 or -53 to
+        /// -1.
+        pub fn by_week_no(
+            mut self,
+            values: impl IntoIterator<Item = i32>,
+        ) -> Self {
+            self.by_week_no = values.into_iter().collect();
+            self
+        }
+
+        /// Sets the `BYMONTH` rule part. Valid values: 1 to 12.
+        pub fn by_month(
+            mut self,
+            values: impl IntoIterator<Item = i32>,
+        ) -> Self {
+            self.by_month = values.into_iter().collect();
+            self
+        }
+
+        /// Sets the `BYSETPOS` rule part. Valid values: 1 to 366 or -366
+        /// to -1. Only meaningful alongside another `BYxxx` rule part —
+        /// not enforced here, matching the parser's own leniency.
+        pub fn by_set_pos(
+            mut self,
+            values: impl IntoIterator<Item = i32>,
+        ) -> Self {
+            self.by_set_pos = values.into_iter().collect();
+            self
+        }
+
+        /// Sets the `WKST` rule part. Default: Monday.
+        pub fn week_start(mut self, weekday: Weekday) -> Self {
+            self.wkst = Some(weekday);
+            self
+        }
+
+        /// Validates every rule part per RFC 5545 §3.3.10 and assembles
+        /// the finished [`Recur`].
+        pub fn build(self) -> Result<Recur, ValueError> {
+            if self.until.is_some() && self.count.is_some() {
+                // UNTIL and COUNT MUST NOT occur in the same recur.
+                return Err(recur_err(
+                    "UNTIL or COUNT, not both",
+                    "both specified",
+                ));
+            }
+            if let Some(interval) = self.interval
+                && interval < 1
+            {
+                return Err(recur_err("INTERVAL", &interval.to_string()));
+            }
+
+            let by_second = self
+                .by_second
+                .into_iter()
+                .map(|n| bounded("BYSECOND", n, 0, 60, Seconds))
+                .collect::<Result<Vec<_>, _>>()?;
+            let by_minute = self
+                .by_minute
+                .into_iter()
+                .map(|n| bounded("BYMINUTE", n, 0, 59, Minutes))
+                .collect::<Result<Vec<_>, _>>()?;
+            let by_hour = self
+                .by_hour
+                .into_iter()
+                .map(|n| bounded("BYHOUR", n, 0, 23, Hour))
+                .collect::<Result<Vec<_>, _>>()?;
+            let by_month_day = self
+                .by_month_day
+                .into_iter()
+                .map(|n| nonzero_bounded("BYMONTHDAY", n, -31, 31, MonthDayNum))
+                .collect::<Result<Vec<_>, _>>()?;
+            let by_year_day = self
+                .by_year_day
+                .into_iter()
+                .map(|n| nonzero_bounded("BYYEARDAY", n, -366, 366, YearDayNum))
+                .collect::<Result<Vec<_>, _>>()?;
+            let by_week_no = self
+                .by_week_no
+                .into_iter()
+                .map(|n| nonzero_bounded("BYWEEKNO", n, -53, 53, WeekNum))
+                .collect::<Result<Vec<_>, _>>()?;
+            let by_month = self
+                .by_month
+                .into_iter()
+                .map(|n| bounded("BYMONTH", n, 1, 12, MonthNum))
+                .collect::<Result<Vec<_>, _>>()?;
+            let by_set_pos = self
+                .by_set_pos
+                .into_iter()
+                .map(|n| nonzero_bounded("BYSETPOS", n, -366, 366, YearDayNum))
+                .collect::<Result<Vec<_>, _>>()?;
+            let by_day = self
+                .by_day
+                .into_iter()
+                .map(|(ordinal, weekday)| {
+                    if let Some(ord) = ordinal
+                        && (ord == 0 || ord.unsigned_abs() > 53)
+                    {
+                        return Err(recur_err(
+                            "BYDAY ordinal",
+                            &ord.to_string(),
+                        ));
+                    }
+                    Ok(WeekdayNum { ordinal, weekday })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(Recur {
+                freq: self.freq,
+                until: self.until,
+                count: self.count,
+                interval: self.interval,
+                by_second,
+                by_minute,
+                by_hour,
+                by_day,
+                by_month_day,
+                by_year_day,
+                by_week_no,
+                by_month,
+                by_set_pos,
+                wkst: self.wkst,
+            })
+        }
+    }
+
     /// The FREQ rule part identifies the type of recurrence rule. This
     /// rule part MUST be specified in the recurrence rule.  Valid values
     /// include SECONDLY, to specify repeating events based on an interval
@@ -1103,10 +1422,13 @@ mod recurrence {
     /// MONTHLY, to specify repeating events based on an interval of a
     /// month or more; and YEARLY, to specify repeating events based on an
     /// interval of a year or more.
-    #[derive(Debug, Clone, Default)]
-    enum Frequency {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub enum Frequency {
+        /// Repeats on an interval of a second or more.
         Secondly,
+        /// Repeats on an interval of a minute or more.
         Minutely,
+        /// Repeats on an interval of an hour or more.
         Hourly,
         /// Every N days.
         Daily,
@@ -1192,9 +1514,31 @@ mod recurrence {
         Ok(WeekdayNum { ordinal, weekday })
     }
 
-    /// Parses a bounded integer sub-part shared by the `BYxxx` list rules,
-    /// e.g. `BYSECOND`'s `0 to 60` range. `N` is the tuple struct's inner
-    /// integer type; `S` is the tuple struct itself.
+    /// Validates and narrows an already-typed integer sub-part shared by
+    /// the `BYxxx` list rules, e.g. `BYSECOND`'s `0 to 60` range. `N` is
+    /// the tuple struct's inner integer type; `S` is the tuple struct
+    /// itself. Shared by [`parse_bounded`] (parsing from text) and
+    /// [`RecurBuilder`] (constructing directly from a caller-supplied
+    /// `i32`, no text round-trip).
+    fn bounded<N, S>(
+        name: &'static str,
+        n: i32,
+        min: i32,
+        max: i32,
+        wrap: impl Fn(N) -> S,
+    ) -> Result<S, ValueError>
+    where
+        N: TryFrom<i32>,
+    {
+        if n < min || n > max {
+            return Err(recur_err(name, &n.to_string()));
+        }
+        let n: N = n.try_into().map_err(|_| recur_err(name, &n.to_string()))?;
+        Ok(wrap(n))
+    }
+
+    /// Parses a bounded integer sub-part shared by the `BYxxx` list rules
+    /// from its text form, then delegates the range check to [`bounded`].
     fn parse_bounded<N, S>(
         name: &'static str,
         tok: &str,
@@ -1206,11 +1550,29 @@ mod recurrence {
         N: TryFrom<i32>,
     {
         let n: i32 = tok.parse().map_err(|_| recur_err(name, tok))?;
-        if n < min || n > max {
-            return Err(recur_err(name, tok));
+        bounded(name, n, min, max, wrap)
+    }
+
+    /// Like [`bounded`], but additionally rejects zero — shared by the
+    /// `BYxxx` rule parts whose grammar excludes it (`BYMONTHDAY`,
+    /// `BYYEARDAY`, `BYWEEKNO`, `BYSETPOS`). Used by [`RecurBuilder::build`]
+    /// alongside the existing string-based `TryFrom<&str>` impls below,
+    /// which keep their own inline nonzero checks so as not to change
+    /// their error text.
+    fn nonzero_bounded<N, S>(
+        name: &'static str,
+        n: i32,
+        min: i32,
+        max: i32,
+        wrap: impl Fn(N) -> S,
+    ) -> Result<S, ValueError>
+    where
+        N: TryFrom<i32>,
+    {
+        if n == 0 {
+            return Err(recur_err(name, &n.to_string()));
         }
-        let n: N = n.try_into().map_err(|_| recur_err(name, tok))?;
-        Ok(wrap(n))
+        bounded(name, n, min, max, wrap)
     }
 
     impl TryFrom<&str> for Seconds {
@@ -1514,6 +1876,90 @@ mod recurrence {
             write!(f, "{}", self.0)
         }
     }
+
+    #[cfg(test)]
+    mod builder_tests {
+        use super::*;
+        use crate::values::Date;
+
+        #[test]
+        fn minimal_builder_round_trips_through_the_parser() {
+            let recur = RecurBuilder::new(Frequency::Weekly).build().unwrap();
+            assert_eq!(recur.to_string(), "FREQ=WEEKLY");
+            let reparsed =
+                Recur::try_from(recur.to_string().as_bytes()).unwrap();
+            assert_eq!(reparsed.to_string(), recur.to_string());
+        }
+
+        #[test]
+        fn full_builder_round_trips_through_the_parser() {
+            let recur = RecurBuilder::new(Frequency::Monthly)
+                .interval(2)
+                .count(10)
+                .by_day([(Some(-1), Weekday::Fr)])
+                .by_month_day([-1])
+                .by_month([1, 12])
+                .week_start(Weekday::Su)
+                .build()
+                .unwrap();
+            let text = recur.to_string();
+            assert_eq!(
+                text,
+                "FREQ=MONTHLY;COUNT=10;INTERVAL=2;BYDAY=-1FR;BYMONTHDAY=-1;\
+                 BYMONTH=1,12;WKST=SU"
+            );
+            let reparsed = Recur::try_from(text.as_bytes()).unwrap();
+            assert_eq!(reparsed.to_string(), text);
+        }
+
+        #[test]
+        fn until_and_count_together_is_rejected() {
+            let err = RecurBuilder::new(Frequency::Daily)
+                .until(DateOrDatetime::Date(Date::new(
+                    chrono::NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                )))
+                .count(5)
+                .build()
+                .unwrap_err();
+            assert!(matches!(err, ValueError::Malformed { .. }));
+        }
+
+        #[test]
+        fn zero_interval_is_rejected() {
+            let err = RecurBuilder::new(Frequency::Daily)
+                .interval(0)
+                .build()
+                .unwrap_err();
+            assert!(matches!(err, ValueError::Malformed { .. }));
+        }
+
+        #[test]
+        fn out_of_range_by_hour_is_rejected() {
+            let err = RecurBuilder::new(Frequency::Daily)
+                .by_hour([24])
+                .build()
+                .unwrap_err();
+            assert!(matches!(err, ValueError::Malformed { .. }));
+        }
+
+        #[test]
+        fn zero_by_month_day_is_rejected() {
+            let err = RecurBuilder::new(Frequency::Monthly)
+                .by_month_day([0])
+                .build()
+                .unwrap_err();
+            assert!(matches!(err, ValueError::Malformed { .. }));
+        }
+
+        #[test]
+        fn out_of_range_by_day_ordinal_is_rejected() {
+            let err = RecurBuilder::new(Frequency::Monthly)
+                .by_day([(Some(0), Weekday::Mo)])
+                .build()
+                .unwrap_err();
+            assert!(matches!(err, ValueError::Malformed { .. }));
+        }
+    }
 }
 
 /// [RFC 4288](https://datatracker.ietf.org/doc/html/rfc4288#section-4.2)
@@ -1540,6 +1986,18 @@ impl TryFrom<&[u8]> for MediaType {
             media_type: t.try_into()?,
             subtype: s.try_into()?,
         })
+    }
+}
+
+impl MediaType {
+    /// Builds a `type/subtype` media type directly from its two halves
+    /// (RFC 4288 §4.2), skipping the `"/"`-split text round-trip
+    /// `TryFrom<&[u8]>` requires.
+    pub fn new(media_type: &str, subtype: &str) -> Self {
+        Self {
+            media_type: media_type.into(),
+            subtype: subtype.into(),
+        }
     }
 }
 
@@ -1593,11 +2051,34 @@ impl TryFrom<&[u8]> for Uri {
     }
 }
 
+impl Uri {
+    /// Builds a `URI` value directly from an already-parsed [`Url`],
+    /// skipping the text round-trip `TryFrom<&[u8]>` requires.
+    pub fn new(url: Url) -> Self {
+        Self(url)
+    }
+
+    /// Parses `s` as a `URI` value. Equivalent to `TryFrom<&[u8]>`, but
+    /// takes a native `&str` instead of raw bytes.
+    pub fn parse(s: &str) -> Result<Self, ValueError> {
+        Ok(Self(url::Url::parse(s)?))
+    }
+}
+
 impl TryFrom<&[u8]> for CalendarUserAddress {
     type Error = ValueError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         let uri: Uri = value.try_into()?;
+        Self::new(uri)
+    }
+}
+
+impl CalendarUserAddress {
+    /// Builds a `CAL-ADDRESS` value from an already-parsed [`Uri`],
+    /// enforcing the same `mailto` scheme requirement (RFC 5545 §3.3.3)
+    /// that `TryFrom<&[u8]>` does.
+    pub fn new(uri: Uri) -> Result<Self, ValueError> {
         if uri.scheme() != "mailto" {
             Err(ValueError::CalUserAddress)
         } else {
@@ -2220,5 +2701,90 @@ mod tests {
             Recur::try_from(b"FREQ=MONTHLY;BYDAY=-1MO;COUNT=5".as_slice())
                 .unwrap();
         assert_eq!(recur.to_string(), "FREQ=MONTHLY;COUNT=5;BYDAY=-1MO");
+    }
+
+    #[test]
+    fn date_new_matches_the_parsed_equivalent() {
+        let built = Date::new(NaiveDate::from_ymd_opt(1997, 7, 14).unwrap());
+        let parsed = Date::try_from(b"19970714".as_slice()).unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn utc_offset_new_matches_the_parsed_equivalent() {
+        let built = UtcOffset::new(FixedOffset::west_opt(5 * 3600).unwrap());
+        let parsed = UtcOffset::try_from(b"-0500".as_slice()).unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn duration_new_matches_the_parsed_equivalent() {
+        let built = Duration::new(ChronoDuration::weeks(7));
+        let parsed = Duration::try_from(b"P7W".as_slice()).unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn binary_new_matches_the_parsed_equivalent() {
+        let built = Binary::new(vec![1, 2, 3]);
+        let parsed = Binary::try_from(b"AQID".as_slice()).unwrap();
+        assert_eq!(&*built, &*parsed);
+    }
+
+    #[test]
+    fn boolean_new_matches_the_parsed_equivalent() {
+        let built = Boolean::new(true);
+        let parsed = Boolean::try_from(b"TRUE".as_slice()).unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn integer_new_matches_the_parsed_equivalent() {
+        let built = Integer::new(-42);
+        let parsed = Integer::try_from(b"-42".as_slice()).unwrap();
+        assert_eq!(*built, *parsed);
+    }
+
+    #[test]
+    fn float_new_matches_the_parsed_equivalent() {
+        let built = Float::new(1.5);
+        let parsed = Float::try_from(b"1.5".as_slice()).unwrap();
+        assert_eq!(*built, *parsed);
+    }
+
+    #[test]
+    fn uri_parse_matches_the_bytes_equivalent() {
+        let built = Uri::parse("http://example.com/report.txt").unwrap();
+        let parsed =
+            Uri::try_from(b"http://example.com/report.txt".as_slice()).unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn calendar_user_address_new_rejects_non_mailto() {
+        let uri = Uri::parse("http://example.com").unwrap();
+        assert!(matches!(
+            CalendarUserAddress::new(uri),
+            Err(ValueError::CalUserAddress)
+        ));
+    }
+
+    #[test]
+    fn calendar_user_address_new_matches_the_parsed_equivalent() {
+        let uri = Uri::parse("mailto:jane@example.com").unwrap();
+        let built = CalendarUserAddress::new(uri).unwrap();
+        let parsed = CalendarUserAddress::try_from(
+            b"mailto:jane@example.com".as_slice(),
+        )
+        .unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn media_type_new_matches_the_parsed_equivalent() {
+        let built = MediaType::new("application", "msword");
+        let parsed =
+            MediaType::try_from(b"application/msword".as_slice()).unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
     }
 }

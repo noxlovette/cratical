@@ -124,6 +124,15 @@ impl TryFrom<&[u8]> for Altrep {
     }
 }
 
+impl Altrep {
+    /// Builds an `ALTREP` parameter directly from an already-parsed
+    /// [`Uri`], skipping the quoted-string text round-trip
+    /// `TryFrom<&[u8]>` requires.
+    pub fn new(uri: Uri) -> Self {
+        Self(uri)
+    }
+}
+
 /// This parameter can be specified on properties with a
 /// CAL-ADDRESS value type.  The parameter specifies the common name
 /// to be associated with the calendar user specified by the property.
@@ -144,6 +153,14 @@ impl TryFrom<&[u8]> for CommonName {
 
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
         Ok(Self(maybe_quoted(b).try_into()?))
+    }
+}
+
+impl CommonName {
+    /// Builds a `CN` parameter directly from already-typed [`Text`],
+    /// skipping the text round-trip `TryFrom<&[u8]>` requires.
+    pub fn new(name: Text) -> Self {
+        Self(name)
     }
 }
 
@@ -174,6 +191,15 @@ impl TryFrom<&[u8]> for Delegators {
         Ok(Self(vec))
     }
 }
+
+impl Delegators {
+    /// Builds a `DELEGATED-FROM` parameter directly from already-typed
+    /// calendar user addresses, skipping the quoted-string-list text
+    /// round-trip `TryFrom<&[u8]>` requires.
+    pub fn new(addresses: Vec<CalendarUserAddress>) -> Self {
+        Self(addresses)
+    }
+}
 /// This parameter can be specified on properties with a
 /// CAL-ADDRESS value type.  This parameter specifies those calendar
 /// users whom have been delegated participation in a group-scheduled
@@ -202,6 +228,15 @@ impl TryFrom<&[u8]> for Delegatees {
     }
 }
 
+impl Delegatees {
+    /// Builds a `DELEGATED-TO` parameter directly from already-typed
+    /// calendar user addresses, skipping the quoted-string-list text
+    /// round-trip `TryFrom<&[u8]>` requires.
+    pub fn new(addresses: Vec<CalendarUserAddress>) -> Self {
+        Self(addresses)
+    }
+}
+
 /// This parameter specifies a reference to a directory entry associated with
 /// the calendar user specified by the property.  The parameter value is a
 /// URI.  The URI parameter value MUST be specified in a quoted-string.
@@ -220,6 +255,15 @@ impl TryFrom<&[u8]> for DirectoryEntryReference {
 
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
         Ok(Self(quoted(b)?.try_into()?))
+    }
+}
+
+impl DirectoryEntryReference {
+    /// Builds a `DIR` parameter directly from an already-parsed [`Uri`],
+    /// skipping the quoted-string text round-trip `TryFrom<&[u8]>`
+    /// requires.
+    pub fn new(uri: Uri) -> Self {
+        Self(uri)
     }
 }
 
@@ -280,6 +324,15 @@ impl TryFrom<&[u8]> for Fmttype {
 
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
         Ok(Self(b.try_into()?))
+    }
+}
+
+impl Fmttype {
+    /// Builds a `FMTTYPE` parameter directly from an already-parsed
+    /// [`MediaType`], skipping the `"/"`-split text round-trip
+    /// `TryFrom<&[u8]>` requires.
+    pub fn new(media_type: MediaType) -> Self {
+        Self(media_type)
     }
 }
 
@@ -372,6 +425,18 @@ impl TryFrom<&[u8]> for Language {
     }
 }
 
+impl Language {
+    /// Builds a `LANGUAGE` parameter from `tag`, validating it as an
+    /// [RFC 5646](https://datatracker.ietf.org/doc/html/rfc5646) language
+    /// tag the same way `TryFrom<&[u8]>` does.
+    pub fn new(tag: &str) -> Result<Self, ParamError> {
+        Ok(Self(
+            langtag::LangTagBuf::from_bytes(tag.as_bytes().to_vec())
+                .map_err(|_| ParamError::Language)?,
+        ))
+    }
+}
+
 /// This parameter can be specified on properties with a
 /// CAL-ADDRESS value type.  The parameter identifies the groups or
 /// list membership for the calendar user specified by the property.
@@ -393,6 +458,15 @@ impl TryFrom<&[u8]> for Member {
             vec.push(quoted(el)?.try_into()?);
         }
         Ok(Self(vec))
+    }
+}
+
+impl Member {
+    /// Builds a `MEMBER` parameter directly from already-typed calendar
+    /// user addresses, skipping the quoted-string-list text round-trip
+    /// `TryFrom<&[u8]>` requires.
+    pub fn new(addresses: Vec<CalendarUserAddress>) -> Self {
+        Self(addresses)
     }
 }
 
@@ -859,11 +933,28 @@ impl TryFrom<&[u8]> for Rsvp {
     }
 }
 
+impl Rsvp {
+    /// Builds an `RSVP` parameter directly from a native `bool`, skipping
+    /// the `"TRUE"`/`"FALSE"` text round-trip `TryFrom<&[u8]>` requires.
+    pub fn new(value: bool) -> Self {
+        Self(Boolean::new(value))
+    }
+}
+
 impl TryFrom<&[u8]> for SentBy {
     type Error = ParamError;
 
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
         Ok(Self(quoted(b)?.try_into()?))
+    }
+}
+
+impl SentBy {
+    /// Builds a `SENT-BY` parameter directly from an already-typed
+    /// [`CalendarUserAddress`], skipping the quoted-string text
+    /// round-trip `TryFrom<&[u8]>` requires.
+    pub fn new(address: CalendarUserAddress) -> Self {
+        Self(address)
     }
 }
 
@@ -881,6 +972,14 @@ impl TryFrom<&[u8]> for TimeZoneIdentifier {
 }
 
 impl TimeZoneIdentifier {
+    /// Builds a `TZID` parameter directly from an already-valid
+    /// [`chrono_tz::Tz`], skipping the IANA-name text round-trip
+    /// `TryFrom<&[u8]>` requires. Infallible — every `Tz` variant is a
+    /// valid IANA zone name by construction.
+    pub fn new(tz: Tz) -> Self {
+        Self(tz)
+    }
+
     /// The parsed [`chrono_tz::Tz`] itself — used to resolve a zoned
     /// `DATE-TIME` value against this `TZID`'s real offset rules (RFC 5545
     /// §3.3.5), rather than the host machine's own time zone.
@@ -1214,6 +1313,13 @@ impl std::fmt::Display for RecurrenceIdentifierRange {
 #[derive(Debug)]
 pub struct ImageDisplay(Vec<ImageDisplayValue>);
 
+impl ImageDisplay {
+    /// Constructs a `DISPLAY` parameter from its list of values.
+    pub fn new(values: Vec<ImageDisplayValue>) -> Self {
+        Self(values)
+    }
+}
+
 /// One value of an [`ImageDisplay`] list.
 #[derive(Debug)]
 pub enum ImageDisplayValue {
@@ -1299,6 +1405,13 @@ impl std::fmt::Display for ImageDisplay {
 /// [Section 6.3](https://datatracker.ietf.org/doc/html/rfc7986#section-6.3)
 #[derive(Debug)]
 pub struct Feature(Vec<FeatureValue>);
+
+impl Feature {
+    /// Constructs a `FEATURE` parameter from its list of values.
+    pub fn new(values: Vec<FeatureValue>) -> Self {
+        Self(values)
+    }
+}
 
 /// One value of a [`Feature`] list.
 #[derive(Debug)]
@@ -1397,6 +1510,13 @@ impl std::fmt::Display for Feature {
 /// [Section 6.4](https://datatracker.ietf.org/doc/html/rfc7986#section-6.4)
 #[derive(Debug)]
 pub struct Label(Text);
+
+impl Label {
+    /// Constructs a `LABEL` parameter from its text.
+    pub fn new(value: Text) -> Self {
+        Self(value)
+    }
+}
 
 impl TryFrom<&[u8]> for Label {
     type Error = ParamError;
@@ -1503,5 +1623,122 @@ mod tests {
             TimeZoneIdentifier::try_from(b"Eastern Standard Time".as_slice()),
             Err(ParamError::Malformed { .. })
         ));
+    }
+
+    #[test]
+    fn tzid_new_matches_the_parsed_equivalent() {
+        let built = TimeZoneIdentifier::new(Tz::America__New_York);
+        let parsed =
+            TimeZoneIdentifier::try_from(b"America/New_York".as_slice())
+                .unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn altrep_new_matches_the_parsed_equivalent() {
+        let built =
+            Altrep::new(Uri::parse("cid:part1.0001@example.org").unwrap());
+        let parsed =
+            Altrep::try_from(b"\"cid:part1.0001@example.org\"".as_slice())
+                .unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn common_name_new_matches_the_parsed_equivalent() {
+        let built = CommonName::new(Text::from("John Smith"));
+        let parsed = CommonName::try_from(b"John Smith".as_slice()).unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn delegators_new_matches_the_parsed_equivalent() {
+        let addr = CalendarUserAddress::new(
+            Uri::parse("mailto:jsmith@example.com").unwrap(),
+        )
+        .unwrap();
+        let built = Delegators::new(vec![addr]);
+        let parsed =
+            Delegators::try_from(b"\"mailto:jsmith@example.com\"".as_slice())
+                .unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn delegatees_new_matches_the_parsed_equivalent() {
+        let addr = CalendarUserAddress::new(
+            Uri::parse("mailto:jdoe@example.com").unwrap(),
+        )
+        .unwrap();
+        let built = Delegatees::new(vec![addr]);
+        let parsed =
+            Delegatees::try_from(b"\"mailto:jdoe@example.com\"".as_slice())
+                .unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn directory_entry_reference_new_matches_the_parsed_equivalent() {
+        let built = DirectoryEntryReference::new(
+            Uri::parse("ldap://example.com:6666/o=ABC%20Industries").unwrap(),
+        );
+        let parsed = DirectoryEntryReference::try_from(
+            b"\"ldap://example.com:6666/o=ABC%20Industries\"".as_slice(),
+        )
+        .unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn fmttype_new_matches_the_parsed_equivalent() {
+        let built = Fmttype::new(MediaType::new("application", "msword"));
+        let parsed =
+            Fmttype::try_from(b"application/msword".as_slice()).unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn language_new_matches_the_parsed_equivalent() {
+        let built = Language::new("en-US").unwrap();
+        let parsed = Language::try_from(b"en-US".as_slice()).unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn language_new_rejects_a_malformed_tag() {
+        assert!(matches!(Language::new(""), Err(ParamError::Language)));
+    }
+
+    #[test]
+    fn member_new_matches_the_parsed_equivalent() {
+        let addr = CalendarUserAddress::new(
+            Uri::parse("mailto:ietf-calsch@example.org").unwrap(),
+        )
+        .unwrap();
+        let built = Member::new(vec![addr]);
+        let parsed =
+            Member::try_from(b"\"mailto:ietf-calsch@example.org\"".as_slice())
+                .unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn rsvp_new_matches_the_parsed_equivalent() {
+        let built = Rsvp::new(true);
+        let parsed = Rsvp::try_from(b"TRUE".as_slice()).unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
+    }
+
+    #[test]
+    fn sent_by_new_matches_the_parsed_equivalent() {
+        let addr = CalendarUserAddress::new(
+            Uri::parse("mailto:jsmith@example.com").unwrap(),
+        )
+        .unwrap();
+        let built = SentBy::new(addr);
+        let parsed =
+            SentBy::try_from(b"\"mailto:jsmith@example.com\"".as_slice())
+                .unwrap();
+        assert_eq!(built.to_string(), parsed.to_string());
     }
 }

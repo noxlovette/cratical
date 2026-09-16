@@ -70,12 +70,44 @@ impl TryFrom<&[u8]> for Attachment {
     }
 }
 
+/// The `ATTACH` value.
 #[derive(Debug)]
-enum AttachmentValue {
+pub enum AttachmentValue {
     /// A URI pointing to the resource.
     Uri(Uri),
     /// The resource's content, inlined and BASE64-decoded.
     Binary(Binary),
+}
+
+impl Attachment {
+    /// Constructs a new `ATTACH` property pointing to a URI, with no
+    /// parameters set beyond `FMTTYPE`.
+    pub fn from_uri(uri: Uri, fmttype: Option<Fmttype>) -> Self {
+        Self {
+            value: AttachmentValue::Uri(uri),
+            params: AttachmentParams {
+                shared: SharedParams::default(),
+                encoding: None,
+                value_data_type: None,
+                fmttype,
+            },
+        }
+    }
+
+    /// Constructs a new `ATTACH` property with inline BASE64-encoded
+    /// content, setting `ENCODING=BASE64;VALUE=BINARY` as required by RFC
+    /// 5545 §3.8.1.1 for this form.
+    pub fn from_binary(data: Binary, fmttype: Option<Fmttype>) -> Self {
+        Self {
+            value: AttachmentValue::Binary(data),
+            params: AttachmentParams {
+                shared: SharedParams::default(),
+                encoding: Some(Encoding::Base64),
+                value_data_type: Some(ValueDataType::Binary),
+                fmttype,
+            },
+        }
+    }
 }
 
 impl std::fmt::Display for Attachment {
@@ -179,6 +211,41 @@ pub struct Categories {
 
 impl_try_from_bytes_list!(Categories, Text, CategoriesParams);
 
+/// Builder for [`Categories`].
+#[derive(Debug, Default)]
+pub struct CategoriesBuilder {
+    value: Vec<Text>,
+    language: Option<Language>,
+}
+
+impl CategoriesBuilder {
+    /// Starts a new builder from the property's required list of
+    /// categories.
+    pub fn new(value: Vec<Text>) -> Self {
+        Self {
+            value,
+            language: None,
+        }
+    }
+
+    /// Sets the `LANGUAGE` parameter.
+    pub fn language(mut self, language: Language) -> Self {
+        self.language = Some(language);
+        self
+    }
+
+    /// Finishes the builder, producing a [`Categories`].
+    pub fn build(self) -> Categories {
+        Categories {
+            value: self.value,
+            params: CategoriesParams {
+                shared: SharedParams::default(),
+                language: self.language,
+            },
+        }
+    }
+}
+
 impl std::fmt::Display for Categories {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "CATEGORIES{}:", self.params)?;
@@ -250,6 +317,7 @@ pub struct Classification {
 }
 
 impl_try_from_bytes!(Classification, ClassificationEnum);
+impl_simple_property!(Classification, ClassificationEnum);
 
 impl std::fmt::Display for Classification {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -257,10 +325,14 @@ impl std::fmt::Display for Classification {
     }
 }
 
+/// The `CLASS` value.
 #[derive(Debug)]
-enum ClassificationEnum {
+pub enum ClassificationEnum {
+    /// Publicly visible.
     Public,
+    /// Private.
     Private,
+    /// Confidential.
     Confidential,
     /// An IANA-registered classification.
     Iana(Text),
@@ -315,6 +387,7 @@ pub struct Comment {
 }
 
 impl_try_from_bytes!(Comment, Text, AltrepLanguageParams);
+impl_altrep_language_builder!(CommentBuilder, Comment, Text);
 
 impl std::fmt::Display for Comment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -340,6 +413,7 @@ pub struct Description {
 }
 
 impl_try_from_bytes!(Description, Text, AltrepLanguageParams);
+impl_altrep_language_builder!(DescriptionBuilder, Description, Text);
 
 impl std::fmt::Display for Description {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -378,6 +452,20 @@ impl_try_from_bytes!(Geo, Pair<Float>, SharedParams, |f: &Pair<Float>| {
     Ok(())
 });
 
+impl Geo {
+    /// Constructs a new `GEO` property, validating that the latitude is in
+    /// `-90.0..=90.0`.
+    pub fn new(value: Pair<Float>) -> Result<Self, PropertyError> {
+        if *value.0 > 90.0 || *value.0 < -90.0 {
+            return Err(PropertyError::InvalidGeo);
+        }
+        Ok(Self {
+            value,
+            params: SharedParams::default(),
+        })
+    }
+}
+
 impl std::fmt::Display for Geo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "GEO{}:{}", self.params, self.value)
@@ -404,6 +492,7 @@ pub struct Location {
 }
 
 impl_try_from_bytes!(Location, Text, AltrepLanguageParams);
+impl_altrep_language_builder!(LocationBuilder, Location, Text);
 
 impl std::fmt::Display for Location {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -441,6 +530,21 @@ impl_try_from_bytes!(PercentComplete, Integer, SharedParams, |v: &Integer| {
         })
     }
 });
+
+impl PercentComplete {
+    /// Constructs a new `PERCENT-COMPLETE` property, validating that the
+    /// value is in `0..=100`.
+    pub fn new(value: Integer) -> Result<Self, PropertyError> {
+        if (0..=100).contains(&*value) {
+            Ok(Self {
+                value,
+                params: SharedParams::default(),
+            })
+        } else {
+            Err(PropertyError::InvalidPercentComplete)
+        }
+    }
+}
 
 impl std::fmt::Display for PercentComplete {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -485,6 +589,21 @@ impl_try_from_bytes!(Priority, Integer, SharedParams, |v: &Integer| {
     }
 });
 
+impl Priority {
+    /// Constructs a new `PRIORITY` property, validating that the value is
+    /// in `0..=9`.
+    pub fn new(value: Integer) -> Result<Self, PropertyError> {
+        if (0..=9).contains(&*value) {
+            Ok(Self {
+                value,
+                params: SharedParams::default(),
+            })
+        } else {
+            Err(PropertyError::InvalidPriority)
+        }
+    }
+}
+
 impl std::fmt::Display for Priority {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "PRIORITY{}:{}", self.params, self.value)
@@ -506,6 +625,7 @@ pub struct Resources {
 }
 
 impl_try_from_bytes!(Resources, Text, AltrepLanguageParams);
+impl_altrep_language_builder!(ResourcesBuilder, Resources, Text);
 
 impl std::fmt::Display for Resources {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -535,6 +655,7 @@ pub struct Status {
 }
 
 impl_try_from_bytes!(Status, StatusValue);
+impl_simple_property!(Status, StatusValue);
 
 impl std::fmt::Display for Status {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -552,7 +673,7 @@ impl std::fmt::Display for Status {
 /// `VTODO`) is a validation concern for whoever builds the component, not
 /// this parse step.
 #[derive(Debug)]
-enum StatusValue {
+pub enum StatusValue {
     /// `VEVENT`: tentatively scheduled.
     Tentative,
     /// `VEVENT`: confirmed.
@@ -626,6 +747,7 @@ pub struct Summary {
 }
 
 impl_try_from_bytes!(Summary, Text, AltrepLanguageParams);
+impl_altrep_language_builder!(SummaryBuilder, Summary, Text);
 
 impl std::fmt::Display for Summary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -656,6 +778,7 @@ pub struct Color {
 }
 
 impl_try_from_bytes!(Color);
+impl_simple_property!(Color, Text);
 
 impl std::fmt::Display for Color {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -718,6 +841,50 @@ impl TryFrom<&[u8]> for Image {
         }
 
         Ok(Self { value, params })
+    }
+}
+
+impl Image {
+    /// Constructs a new `IMAGE` property pointing to a URI, with no
+    /// parameters set beyond `FMTTYPE`/`ALTREP`/`DISPLAY`.
+    pub fn from_uri(
+        uri: Uri,
+        fmttype: Option<Fmttype>,
+        altrep: Option<Altrep>,
+        display: Option<ImageDisplay>,
+    ) -> Self {
+        Self {
+            value: AttachmentValue::Uri(uri),
+            params: ImageParams {
+                shared: SharedParams::default(),
+                encoding: None,
+                value_data_type: None,
+                fmttype,
+                altrep,
+                display,
+            },
+        }
+    }
+
+    /// Constructs a new `IMAGE` property with inline BASE64-encoded
+    /// content, setting `ENCODING=BASE64;VALUE=BINARY` as required by RFC
+    /// 7986 §5.10 for this form.
+    pub fn from_binary(
+        data: Binary,
+        fmttype: Option<Fmttype>,
+        display: Option<ImageDisplay>,
+    ) -> Self {
+        Self {
+            value: AttachmentValue::Binary(data),
+            params: ImageParams {
+                shared: SharedParams::default(),
+                encoding: Some(Encoding::Base64),
+                value_data_type: Some(ValueDataType::Binary),
+                fmttype,
+                altrep: None,
+                display,
+            },
+        }
     }
 }
 
@@ -821,6 +988,58 @@ impl std::fmt::Display for Conference {
     }
 }
 
+/// Builder for [`Conference`].
+#[derive(Debug)]
+pub struct ConferenceBuilder {
+    value: Uri,
+    feature: Option<Feature>,
+    label: Option<Label>,
+    language: Option<Language>,
+}
+
+impl ConferenceBuilder {
+    /// Starts building a `CONFERENCE` property from its URI.
+    pub fn new(value: Uri) -> Self {
+        Self {
+            value,
+            feature: None,
+            label: None,
+            language: None,
+        }
+    }
+
+    /// Sets `FEATURE`.
+    pub fn feature(mut self, feature: Feature) -> Self {
+        self.feature = Some(feature);
+        self
+    }
+
+    /// Sets `LABEL`.
+    pub fn label(mut self, label: Label) -> Self {
+        self.label = Some(label);
+        self
+    }
+
+    /// Sets `LANGUAGE`.
+    pub fn language(mut self, language: Language) -> Self {
+        self.language = Some(language);
+        self
+    }
+
+    /// Finishes the builder, producing the property.
+    pub fn build(self) -> Conference {
+        Conference {
+            value: self.value,
+            params: ConferenceParams {
+                shared: SharedParams::default(),
+                feature: self.feature,
+                label: self.label,
+                language: self.language,
+            },
+        }
+    }
+}
+
 #[derive(Default, Debug)]
 struct ConferenceParams {
     shared: SharedParams,
@@ -892,6 +1111,7 @@ pub struct RefreshInterval {
 }
 
 impl_try_from_bytes!(RefreshInterval, DurationV);
+impl_simple_property!(RefreshInterval, DurationV);
 
 impl std::fmt::Display for RefreshInterval {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -917,6 +1137,7 @@ pub struct Source {
 }
 
 impl_try_from_bytes!(Source, Uri);
+impl_simple_property!(Source, Uri);
 
 impl std::fmt::Display for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -927,6 +1148,63 @@ impl std::fmt::Display for Source {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn color_source_refresh_interval_new_match_the_parsed_equivalent() {
+        assert_eq!(
+            Color::new("turquoise".into()).to_string(),
+            "COLOR:turquoise"
+        );
+        assert_eq!(
+            Source::new(
+                Uri::parse("https://example.com/holidays.ics").unwrap()
+            )
+            .to_string(),
+            "SOURCE:https://example.com/holidays.ics"
+        );
+        assert_eq!(
+            RefreshInterval::new(DurationV::new(chrono::Duration::hours(1)))
+                .to_string(),
+            "REFRESH-INTERVAL:PT1H"
+        );
+    }
+
+    #[test]
+    fn conference_builder_round_trips() {
+        let conference = ConferenceBuilder::new(
+            Uri::parse("tel:+1-412-555-0123,,,654321").unwrap(),
+        )
+        .feature(Feature::new(vec![crate::params::FeatureValue::Phone]))
+        .build();
+        assert_eq!(
+            conference.to_string(),
+            "CONFERENCE;FEATURE=PHONE:tel:+1-412-555-0123,,,654321"
+        );
+    }
+
+    #[test]
+    fn image_from_uri_and_from_binary_round_trip() {
+        let image = Image::from_uri(
+            Uri::parse("http://example.com/images/party.png").unwrap(),
+            Some(Fmttype::new(crate::values::MediaType::new("image", "png"))),
+            None,
+            None,
+        );
+        assert_eq!(
+            image.to_string(),
+            "IMAGE;FMTTYPE=image/png:http://example.com/images/party.png"
+        );
+
+        let binary = Image::from_binary(
+            Binary::try_from(b"aGVsbG8=".as_slice()).unwrap(),
+            None,
+            None,
+        );
+        assert_eq!(
+            binary.to_string(),
+            "IMAGE;ENCODING=BASE64;VALUE=BINARY:aGVsbG8="
+        );
+    }
 
     #[test]
     fn classification_fixed_tokens() {
@@ -1111,5 +1389,84 @@ mod tests {
     fn geo_display_round_trips_the_lat_lon_pair() {
         let geo = Geo::try_from(b":37.386013;-122.082932".as_slice()).unwrap();
         assert_eq!(geo.to_string(), "GEO:37.386013;-122.082932");
+    }
+
+    #[test]
+    fn geo_new_matches_the_parsed_equivalent() {
+        let geo =
+            Geo::new(Pair::new(Float::new(37.386013), Float::new(-122.082932)))
+                .unwrap();
+        assert_eq!(geo.to_string(), "GEO:37.386013;-122.082932");
+    }
+
+    #[test]
+    fn geo_new_rejects_out_of_range_latitude() {
+        assert!(
+            Geo::new(Pair::new(Float::new(91.0), Float::new(0.0))).is_err()
+        );
+    }
+
+    #[test]
+    fn percent_complete_new_rejects_out_of_range() {
+        assert!(PercentComplete::new(Integer::new(101)).is_err());
+        assert!(PercentComplete::new(Integer::new(39)).is_ok());
+    }
+
+    #[test]
+    fn priority_new_rejects_out_of_range() {
+        assert!(Priority::new(Integer::new(10)).is_err());
+        assert!(Priority::new(Integer::new(1)).is_ok());
+    }
+
+    #[test]
+    fn altrep_language_builders_round_trip() {
+        let summary = SummaryBuilder::new("Department Party".into()).build();
+        assert_eq!(summary.to_string(), "SUMMARY:Department Party");
+
+        let comment = CommentBuilder::new("Hi".into())
+            .altrep(crate::params::Altrep::new(
+                crate::values::Uri::parse("cid:part1").unwrap(),
+            ))
+            .build();
+        assert_eq!(comment.to_string(), "COMMENT;ALTREP=\"cid:part1\":Hi");
+    }
+
+    #[test]
+    fn categories_builder_round_trips_the_comma_separated_list() {
+        let categories = CategoriesBuilder::new(vec![
+            "Meeting, John".into(),
+            "Work, Sarah".into(),
+            "Project".into(),
+        ])
+        .build();
+        assert_eq!(
+            categories.to_string(),
+            "CATEGORIES:Meeting\\, John,Work\\, Sarah,Project"
+        );
+    }
+
+    #[test]
+    fn attachment_from_uri_round_trips() {
+        let attachment = Attachment::from_uri(
+            crate::values::Uri::parse("ftp://example.com/pub/docs/agenda.doc")
+                .unwrap(),
+            None,
+        );
+        assert_eq!(
+            attachment.to_string(),
+            "ATTACH:ftp://example.com/pub/docs/agenda.doc"
+        );
+    }
+
+    #[test]
+    fn attachment_from_binary_sets_encoding_and_value_params() {
+        let attachment = Attachment::from_binary(
+            crate::values::Binary::new(b"hello".to_vec()),
+            None,
+        );
+        assert_eq!(
+            attachment.to_string(),
+            "ATTACH;ENCODING=BASE64;VALUE=BINARY:aGVsbG8="
+        );
     }
 }

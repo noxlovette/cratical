@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 pub(crate) mod ast;
+pub use ast::ComponentError;
 mod calendar;
 pub use calendar::{Calendar, CalendarParseError, Component};
 /// As specified [in the RFC Section 3.6](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6)
@@ -26,6 +27,13 @@ pub struct Uid(String);
 /// that carry two coordinates.
 #[derive(Debug)]
 pub struct Pair<T>(T, T);
+
+impl<T> Pair<T> {
+    /// Constructs a pair directly from its two values.
+    pub fn new(a: T, b: T) -> Self {
+        Self(a, b)
+    }
+}
 
 impl<T> TryFrom<&[u8]> for Pair<T>
 where

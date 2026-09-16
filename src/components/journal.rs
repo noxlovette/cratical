@@ -1,4 +1,5 @@
 use crate::{
+    ast::ComponentError,
     components::write_lines,
     properties::{
         Attachment, Attendee, Categories, Classification, Color, Comment,
@@ -283,5 +284,294 @@ impl std::fmt::Display for Journal {
         write_lines(f, &self.xprop)?;
         write_lines(f, &self.iana)?;
         write!(f, "END:VJOURNAL\r\n")
+    }
+}
+
+/// Builder for [`Journal`]. RFC 5545 §3.6.3 places no mutual-exclusion or
+/// "requires" rules on `VJOURNAL` — the only cross-field checks are the
+/// same value-type/`TZID` matching between `DTSTART` and its siblings
+/// used everywhere else in this crate, which can't be resolved until the
+/// actual property values are known, so they stay runtime checks in
+/// [`Self::build`].
+#[derive(Debug)]
+pub struct JournalBuilder {
+    dtstamp: DateTimeStamp,
+    uid: Uid,
+    class: Option<Classification>,
+    created: Option<DateTimeCreated>,
+    dtstart: Option<DateTimeStart>,
+    last_mod: Option<LastModified>,
+    organizer: Option<Organizer>,
+    recurid: Option<RecurrenceId>,
+    seq: Option<Sequence>,
+    status: Option<Status>,
+    summary: Option<Summary>,
+    url: Option<UniformResourceLocator>,
+    rrule: Option<RRule>,
+    attach: Vec<Attachment>,
+    attendee: Vec<Attendee>,
+    categories: Vec<Categories>,
+    comment: Vec<Comment>,
+    contact: Vec<Contact>,
+    description: Vec<Description>,
+    exdate: Vec<ExceptionDateTimes>,
+    related: Vec<RelatedTo>,
+    rdate: Vec<RecurrenceDateTimes>,
+    rstatus: Vec<RequestStatus>,
+    color: Option<Color>,
+    image: Vec<Image>,
+    xprop: Vec<Xprop>,
+    iana: Vec<Iana>,
+}
+
+impl JournalBuilder {
+    /// Starts building a `VJOURNAL` from its two properties RFC 5545
+    /// §3.6.3 requires unconditionally: `DTSTAMP` and `UID`.
+    pub fn new(dtstamp: DateTimeStamp, uid: Uid) -> Self {
+        Self {
+            dtstamp,
+            uid,
+            class: None,
+            created: None,
+            dtstart: None,
+            last_mod: None,
+            organizer: None,
+            recurid: None,
+            seq: None,
+            status: None,
+            summary: None,
+            url: None,
+            rrule: None,
+            attach: Vec::new(),
+            attendee: Vec::new(),
+            categories: Vec::new(),
+            comment: Vec::new(),
+            contact: Vec::new(),
+            description: Vec::new(),
+            exdate: Vec::new(),
+            related: Vec::new(),
+            rdate: Vec::new(),
+            rstatus: Vec::new(),
+            color: None,
+            image: Vec::new(),
+            xprop: Vec::new(),
+            iana: Vec::new(),
+        }
+    }
+
+    /// Sets `CLASS`.
+    pub fn class(mut self, v: Classification) -> Self {
+        self.class = Some(v);
+        self
+    }
+
+    /// Sets `CREATED`.
+    pub fn created(mut self, v: DateTimeCreated) -> Self {
+        self.created = Some(v);
+        self
+    }
+
+    /// Sets `DTSTART`.
+    pub fn dtstart(mut self, v: DateTimeStart) -> Self {
+        self.dtstart = Some(v);
+        self
+    }
+
+    /// Sets `LAST-MODIFIED`.
+    pub fn last_mod(mut self, v: LastModified) -> Self {
+        self.last_mod = Some(v);
+        self
+    }
+
+    /// Sets `ORGANIZER`.
+    pub fn organizer(mut self, v: Organizer) -> Self {
+        self.organizer = Some(v);
+        self
+    }
+
+    /// Sets `RECURRENCE-ID`.
+    pub fn recurid(mut self, v: RecurrenceId) -> Self {
+        self.recurid = Some(v);
+        self
+    }
+
+    /// Sets `SEQUENCE`.
+    pub fn seq(mut self, v: Sequence) -> Self {
+        self.seq = Some(v);
+        self
+    }
+
+    /// Sets `STATUS`.
+    pub fn status(mut self, v: Status) -> Self {
+        self.status = Some(v);
+        self
+    }
+
+    /// Sets `SUMMARY`.
+    pub fn summary(mut self, v: Summary) -> Self {
+        self.summary = Some(v);
+        self
+    }
+
+    /// Sets `URL`.
+    pub fn url(mut self, v: UniformResourceLocator) -> Self {
+        self.url = Some(v);
+        self
+    }
+
+    /// Sets `RRULE`.
+    pub fn rrule(mut self, v: RRule) -> Self {
+        self.rrule = Some(v);
+        self
+    }
+
+    /// Adds an `ATTACH` property.
+    pub fn attach(mut self, v: Attachment) -> Self {
+        self.attach.push(v);
+        self
+    }
+
+    /// Adds an `ATTENDEE` property.
+    pub fn attendee(mut self, v: Attendee) -> Self {
+        self.attendee.push(v);
+        self
+    }
+
+    /// Adds a `CATEGORIES` property.
+    pub fn categories(mut self, v: Categories) -> Self {
+        self.categories.push(v);
+        self
+    }
+
+    /// Adds a `COMMENT` property.
+    pub fn comment(mut self, v: Comment) -> Self {
+        self.comment.push(v);
+        self
+    }
+
+    /// Adds a `CONTACT` property.
+    pub fn contact(mut self, v: Contact) -> Self {
+        self.contact.push(v);
+        self
+    }
+
+    /// Adds a `DESCRIPTION` property.
+    pub fn description(mut self, v: Description) -> Self {
+        self.description.push(v);
+        self
+    }
+
+    /// Adds an `EXDATE` property.
+    pub fn exdate(mut self, v: ExceptionDateTimes) -> Self {
+        self.exdate.push(v);
+        self
+    }
+
+    /// Adds a `RELATED-TO` property.
+    pub fn related(mut self, v: RelatedTo) -> Self {
+        self.related.push(v);
+        self
+    }
+
+    /// Adds an `RDATE` property.
+    pub fn rdate(mut self, v: RecurrenceDateTimes) -> Self {
+        self.rdate.push(v);
+        self
+    }
+
+    /// Adds a `REQUEST-STATUS` property.
+    pub fn rstatus(mut self, v: RequestStatus) -> Self {
+        self.rstatus.push(v);
+        self
+    }
+
+    /// Sets `COLOR` (RFC 7986 §5.9).
+    pub fn color(mut self, v: Color) -> Self {
+        self.color = Some(v);
+        self
+    }
+
+    /// Adds an `IMAGE` property (RFC 7986 §5.10).
+    pub fn image(mut self, v: Image) -> Self {
+        self.image.push(v);
+        self
+    }
+
+    /// Adds a non-standard (`X-`) property.
+    pub fn xprop(mut self, v: Xprop) -> Self {
+        self.xprop.push(v);
+        self
+    }
+
+    /// Adds an IANA-registered property this crate doesn't otherwise model.
+    pub fn iana(mut self, v: Iana) -> Self {
+        self.iana.push(v);
+        self
+    }
+
+    /// Validates the cross-field rules RFC 5545 §3.6.3 places on
+    /// `VJOURNAL` and assembles the finished [`Journal`].
+    pub fn build(self) -> Result<Journal, ComponentError> {
+        if let Some(dtstart) = self.dtstart.as_ref() {
+            dtstart.cmp_until(self.rrule.as_ref())?;
+            dtstart.cmp_exdate(&self.exdate)?;
+            dtstart.cmp_rdate(&self.rdate)?;
+            dtstart.cmp_exdate_tzid(&self.exdate)?;
+            dtstart.cmp_rdate_tzid(&self.rdate)?;
+        }
+
+        Ok(Journal {
+            dtstamp: self.dtstamp,
+            uid: self.uid,
+            class: self.class,
+            created: self.created,
+            dtstart: self.dtstart,
+            last_mod: self.last_mod,
+            organizer: self.organizer,
+            recurid: self.recurid,
+            seq: self.seq,
+            status: self.status,
+            summary: self.summary,
+            url: self.url,
+            rrule: self.rrule,
+            attach: self.attach,
+            attendee: self.attendee,
+            categories: self.categories,
+            comment: self.comment,
+            contact: self.contact,
+            description: self.description,
+            exdate: self.exdate,
+            related: self.related,
+            rdate: self.rdate,
+            rstatus: self.rstatus,
+            color: self.color,
+            image: self.image,
+            xprop: self.xprop,
+            iana: self.iana,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::values::DateTime;
+    use chrono::{TimeZone, Utc};
+
+    #[test]
+    fn journal_builder_round_trips_a_minimal_journal() {
+        let journal = JournalBuilder::new(
+            DateTimeStamp::new(DateTime::Utc(
+                Utc.with_ymd_and_hms(1997, 9, 1, 13, 0, 0).unwrap(),
+            )),
+            Uid::new("19970901T130000Z-123405@example.com".into()),
+        )
+        .build()
+        .unwrap();
+        assert_eq!(
+            journal.to_string(),
+            "BEGIN:VJOURNAL\r\nDTSTAMP:19970901T130000Z\r\nUID:\
+             19970901T130000Z-123405@example.com\r\nEND:VJOURNAL\r\n"
+        );
     }
 }

@@ -21,6 +21,41 @@ pub struct RequestStatus {
 
 impl_try_from_bytes!(RequestStatus, Text, RequestStatusParams);
 
+/// Builder for [`RequestStatus`].
+#[derive(Debug)]
+pub struct RequestStatusBuilder {
+    value: Text,
+    language: Option<Language>,
+}
+
+impl RequestStatusBuilder {
+    /// Starts a new builder from the property's required value
+    /// (`statcode;statdesc[;extdata]`, per RFC 5545 §3.8.8.3).
+    pub fn new(value: Text) -> Self {
+        Self {
+            value,
+            language: None,
+        }
+    }
+
+    /// Sets the `LANGUAGE` parameter.
+    pub fn language(mut self, language: Language) -> Self {
+        self.language = Some(language);
+        self
+    }
+
+    /// Finishes the builder, producing a [`RequestStatus`].
+    pub fn build(self) -> RequestStatus {
+        RequestStatus {
+            value: self.value,
+            params: RequestStatusParams {
+                shared: SharedParams::default(),
+                language: self.language,
+            },
+        }
+    }
+}
+
 impl std::fmt::Display for RequestStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "REQUEST-STATUS{}:{}", self.params, self.value.as_str())
@@ -71,5 +106,11 @@ mod tests {
         // truncate it at "2.0".
         let rs = RequestStatus::try_from(b":2.0;Success".as_slice()).unwrap();
         assert_eq!(&*rs.value, "2.0;Success");
+    }
+
+    #[test]
+    fn request_status_builder_round_trips() {
+        let rs = RequestStatusBuilder::new("2.0;Success".into()).build();
+        assert_eq!(rs.to_string(), "REQUEST-STATUS:2.0;Success");
     }
 }
