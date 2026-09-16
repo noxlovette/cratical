@@ -81,6 +81,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
+name = "cratical"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "langtag",
+ "memchr",
+ "nanoid",
+ "phf 0.14.0",
+ "thiserror 2.0.20",
+ "url",
+]
+
+[[package]]
 name = "displaydoc"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -170,22 +186,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
 dependencies = [
  "cc",
-]
-
-[[package]]
-name = "icalendar"
-version = "0.1.0"
-dependencies = [
- "base64",
- "bytes",
- "chrono",
- "chrono-tz",
- "langtag",
- "memchr",
- "nanoid",
- "phf 0.14.0",
- "thiserror 2.0.20",
- "url",
 ]
 
 [[package]]

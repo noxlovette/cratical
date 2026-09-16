@@ -1,5 +1,5 @@
 [package]
-name = "icalendar"
+name = "cratical"
 version = "0.1.0"
 authors = ["Danila Volkov <danila.volkov@noxlovette.com>"]
 description = "RFC 5545 in Rust"
