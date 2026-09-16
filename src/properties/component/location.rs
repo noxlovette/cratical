@@ -104,6 +104,7 @@ mod tests {
         assert_eq!(name.to_string(), "NAME:Company Vacation");
     }
 
+    #[cfg(feature = "rfc_9074")]
     #[test]
     fn location_type_new_matches_the_parsed_equivalent() {
         let loctype =

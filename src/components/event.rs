@@ -915,6 +915,11 @@ mod tests {
     }
 
     #[test]
+    // rustfmt's `format_strings` wrapping of this literal corrupts its
+    // runtime value (it splits inside a `\r\n` escape pair, not between
+    // whole escapes) — skip it here rather than let a formatting pass
+    // silently reintroduce that bug.
+    #[rustfmt::skip]
     fn event_builder_round_trips_a_minimal_event() {
         let dtstart = DateTimeStartBuilder::new(DateOrDatetime::DateTime(
             DateTime::Utc(Utc.with_ymd_and_hms(1997, 9, 3, 16, 30, 0).unwrap()),
@@ -926,8 +931,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             event.to_string(),
-            "BEGIN:VEVENT\r\nDTSTAMP:19970901T130000Z\r\nUID:123@example.com\\
-             r\nDTSTART:19970903T163000Z\r\nEND:VEVENT\r\n"
+            "BEGIN:VEVENT\r\nDTSTAMP:19970901T130000Z\r\nUID:123@example.com\r\nDTSTART:19970903T163000Z\r\nEND:VEVENT\r\n"
         );
     }
 

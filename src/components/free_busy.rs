@@ -342,6 +342,11 @@ mod tests {
     use super::*;
 
     #[test]
+    // rustfmt's `format_strings` wrapping of this literal corrupts its
+    // runtime value (it splits inside a `\r\n` escape pair, not between
+    // whole escapes) — skip it here rather than let a formatting pass
+    // silently reintroduce that bug.
+    #[rustfmt::skip]
     fn free_busy_builder_round_trips_a_minimal_free_busy() {
         let free_busy = FreeBusyBuilder::new()
             .uid(Uid::new("19970901T082949Z-FA43EF@example.com".into()))
@@ -349,8 +354,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             free_busy.to_string(),
-            "BEGIN:VFREEBUSY\r\nUID:19970901T082949Z-FA43EF@example.com\r\\
-             nEND:VFREEBUSY\r\n"
+            "BEGIN:VFREEBUSY\r\nUID:19970901T082949Z-FA43EF@example.com\r\nEND:VFREEBUSY\r\n"
         );
     }
 

@@ -220,6 +220,11 @@ mod tests {
     use super::*;
 
     #[test]
+    // rustfmt's `format_strings` wrapping of this literal corrupts its
+    // runtime value (it splits inside a `\r\n` escape pair, not between
+    // whole escapes) — skip it here rather than let a formatting pass
+    // silently reintroduce that bug.
+    #[rustfmt::skip]
     fn vlocation_builder_round_trips_a_minimal_vlocation() {
         let vlocation =
             VLocationBuilder::new(Uid::new("123456-abcdef-98765432".into()))
@@ -234,8 +239,7 @@ mod tests {
                 .build();
         assert_eq!(
             vlocation.to_string(),
-            "BEGIN:VLOCATION\r\nUID:123456-abcdef-98765432\r\nNAME:Office\r\\
-             nURL:geo:40.443,-79.945;u=10\r\nEND:VLOCATION\r\n"
+            "BEGIN:VLOCATION\r\nUID:123456-abcdef-98765432\r\nNAME:Office\r\nURL:geo:40.443,-79.945;u=10\r\nEND:VLOCATION\r\n"
         );
     }
 }
