@@ -12,30 +12,39 @@
 //!   inputs. These are only asserted not to panic — a parse `Err` is a fine,
 //!   expected outcome for adversarial/malformed bytes.
 //!
-//! A handful of files under `collective-icalendar/calendars/` are themselves
-//! deliberately malformed (see issue #4) rather than real-world-valid — they
-//! are excluded from the blanket "must parse successfully" generation below
-//! (`MALFORMED_FIXTURES`) and instead get individual, specific assertions in
-//! `tests/malformed_input.rs`.
+//! A handful of files under `collective-icalendar/`/`libical/` are
+//! themselves deliberately malformed (see issue #4) or otherwise genuinely
+//! RFC 5545-invalid (missing a required property, an empty `VCALENDAR` with
+//! zero components, malformed parameter syntax, ... — see issue #27) rather
+//! than real-world-valid — they are excluded from the blanket "must parse
+//! successfully" generation below (`MALFORMED_FIXTURES`) and instead get
+//! individual, specific assertions in `tests/malformed_input.rs`.
 //!
 //! Another handful are excerpts too incomplete to form a valid
-//! `icalobject` on their own (the three RFC 7953 `VAVAILABILITY` fixtures
-//! and the five RFC 9074 `VALARM`-extension fixtures — bare excerpts with
+//! `icalobject` on their own: the three RFC 7953 `VAVAILABILITY` fixtures
+//! and the five RFC 9074 `VALARM`-extension fixtures (bare excerpts with
 //! no `VCALENDAR` wrapper, or missing `PRODID`/`VERSION`; `VAVAILABILITY`
 //! is implemented under the `rfc_7953` feature (issue #16) and `VLOCATION`/
 //! the RFC 9074 `VALARM` extensions are implemented under the `rfc_9074`
-//! feature (issue #17)) — excluded the same way (`OUT_OF_SCOPE_FIXTURES`),
-//! with dedicated assertions in `tests/out_of_scope.rs` and real coverage
-//! of the wrapped equivalents in `tests/rfc_7953.rs`/`tests/rfc_9074.rs`.
+//! feature (issue #17)), plus a much larger set of bare component excerpts
+//! (`VALARM`/`VEVENT`/`VTODO`/`VJOURNAL`/`VFREEBUSY`, and one bare `VCARD`
+//! that isn't even an iCalendar object) with no `VCALENDAR` wrapper at all,
+//! unrelated to any particular RFC feature's scope (issue #27) — excluded
+//! the same way (`OUT_OF_SCOPE_FIXTURES`), with dedicated assertions in
+//! `tests/out_of_scope.rs` and real coverage of the wrapped equivalents in
+//! `tests/rfc_7953.rs`/`tests/rfc_9074.rs` (for the RFC 7953/9074 ones).
 
 use std::{
     env, fs,
     path::{Path, PathBuf},
 };
 
-/// Files under `collective-icalendar/` that are deliberately malformed
-/// (real-world-broken exports, RFC violations, fuzzer-found edge cases —
-/// see issue #4), not valid calendars that happen to fail. Excluded from the
+/// Files under `collective-icalendar/`/`libical/` that are deliberately
+/// malformed (real-world-broken exports, RFC violations, fuzzer-found edge
+/// cases — see issue #4) or otherwise genuinely RFC 5545-invalid content
+/// (missing a required property, zero components under `VCALENDAR`,
+/// malformed parameter syntax, duplicated singleton properties, ... — see
+/// issue #27), not valid calendars that happen to fail. Excluded from the
 /// blanket "must parse successfully" generation; each gets a dedicated,
 /// specific test in `tests/malformed_input.rs` instead.
 const MALFORMED_FIXTURES: &[&str] = &[
@@ -54,18 +63,198 @@ const MALFORMED_FIXTURES: &[&str] = &[
     "collective-icalendar/calendars/fuzz_testcase_vtimezone_lone_cr.ics",
     "collective-icalendar/calendars/\
      issue_351_whitespace_in_property_and_params.ics",
+    // --- issue #27 bucket 2: genuinely RFC 5545-invalid content ---
+    // Missing DTSTAMP (REQUIRED, e.g. §3.6.1).
+    "collective-icalendar/calendars/created_calendar_with_unicode_fields.ics",
+    "collective-icalendar/calendars/example.ics",
+    "collective-icalendar/calendars/issue_1050_calendar_with_events_and_todos.\
+     ics",
+    "collective-icalendar/calendars/issue_1050_forward_timezone_reference.ics",
+    "collective-icalendar/calendars/issue_1050_simple_calendar.ics",
+    "collective-icalendar/calendars/issue_1081_event_with_rrule.ics",
+    "collective-icalendar/calendars/issue_1081_list_of_properties.ics",
+    "collective-icalendar/calendars/issue_1081_tzid_param.ics",
+    "collective-icalendar/calendars/issue_1231_recurrence.ics",
+    "collective-icalendar/calendars/issue_1426.ics",
+    "collective-icalendar/calendars/issue_1426_value_parameters.ics",
+    "libical/2445.ics",
+    "libical/large.ics",
+    // Missing PRODID (REQUIRED at VCALENDAR level, §3.4).
+    "collective-icalendar/calendars/issue_168_expected_output.ics",
+    "collective-icalendar/calendars/issue_178_custom_component_inside_other.\
+     ics",
+    "collective-icalendar/calendars/issue_322_expected_calendar.ics",
+    "collective-icalendar/calendars/issue_722_missing_timezones.ics",
+    "collective-icalendar/calendars/issue_798_freebusy.ics",
+    "collective-icalendar/calendars/issue_798_related_to.ics",
+    "collective-icalendar/calendars/period_with_timezone.ics",
+    "collective-icalendar/calendars/rfc_5545_RDATE_example.ics",
+    "collective-icalendar/calendars/rfc_6868.ics",
+    "collective-icalendar/calendars/rfc_7256_multi_value_parameters.ics",
+    "collective-icalendar/calendars/rfc_7986_conferences.ics",
+    "collective-icalendar/calendars/rfc_7986_image.ics",
+    "libical/smallcluster.ics",
+    // Missing DTSTART (REQUIRED per §3.6.1's grammar when METHOD is absent
+    // — confirmed none of these set METHOD at the calendar level).
+    "collective-icalendar/calendars/issue_1050_multiple_calendars.ics",
+    "collective-icalendar/calendars/issue_1050_uid_in_description.ics",
+    "collective-icalendar/calendars/issue_1081_with_summary.ics",
+    "collective-icalendar/calendars/issue_1549_binary_attachment.ics",
+    "collective-icalendar/calendars/rfc_9253_gap.ics",
+    "collective-icalendar/calendars/rfc_9253_related_to.ics",
+    // Premature end of input: an empty RDATE value (grammar requires >=1
+    // rdtval), a FREEBUSY/RDATE PERIOD using bare DATE instead of the
+    // required DATE-TIME on both sides, a truncated DATE-TIME missing its
+    // seconds component, or (restriction.ics) deliberately duplicated
+    // singleton properties.
+    "collective-icalendar/calendars/issue_1081_empty_rdate.ics",
+    "collective-icalendar/calendars/issue_1633_freebusy_with_dates.ics",
+    "collective-icalendar/calendars/issue_1633_rdate_with_dates.ics",
+    "collective-icalendar/calendars/issue_1633_rdate_with_dates_and_tzid.ics",
+    "libical/2.ics",
+    "libical/process-calendar.ics",
+    "libical/process-incoming.ics",
+    "libical/restriction.ics",
+    // Zero components under VCALENDAR (grammar requires >=1) or a
+    // malformed VCALENDAR closing (trailing garbage line, missing END).
+    "collective-icalendar/calendars/calendar_with_unicode.ics",
+    "collective-icalendar/calendars/empty.ics",
+    "collective-icalendar/calendars/issue_104_broken_calendar.ics",
+    "collective-icalendar/calendars/issue_1050_empty_calendar.ics",
+    "collective-icalendar/calendars/issue_1238.ics",
+    "collective-icalendar/calendars/pr_480_summary_with_colon.ics",
+    "collective-icalendar/calendars/rfc_7265_example_1.ics",
+    "collective-icalendar/calendars/rfc_7986_properties.ics",
+    "collective-icalendar/calendars/time.ics",
+    // Malformed parameter syntax.
+    "collective-icalendar/calendars/issue_168_input.ics",
+    "collective-icalendar/calendars/issue_348_exception_parsing_value.ics",
+    // Missing DESCRIPTION on a VALARM with ACTION:DISPLAY (required, §3.6.6).
+    "collective-icalendar/calendars/issue_1050_all_components.ics",
+    // Invalid UTF-8 / control characters.
+    "collective-icalendar/calendars/issue_1081_invalid_start_valid_end.ics",
+    // Malformed IMAGE value.
+    "collective-icalendar/calendars/issue_1561_image_value.ics",
+    // --- issue #27 bucket 3 follow-up: fixtures unblocked by the TZID
+    // fix (TimeZoneIdentifier no longer hard-rejects a non-IANA name) but
+    // still genuinely invalid for an unrelated reason. ---
+    // Missing PRODID (REQUIRED at VCALENDAR level, §3.4).
+    "collective-icalendar/calendars/america_new_york.ics",
+    "collective-icalendar/calendars/\
+     issue_237_fail_to_parse_timezone_with_non_ascii_tzid.ics",
+    "collective-icalendar/calendars/issue_466_convert_tzid_with_slash.ics",
+    "collective-icalendar/calendars/issue_466_respect_unique_timezone.ics",
+    "collective-icalendar/calendars/issue_722_missing_VTIMEZONE_custom.ics",
+    "collective-icalendar/calendars/issue_722_timezone_transition_ambiguity.\
+     ics",
+    // Missing DTSTAMP (REQUIRED, §3.6.1).
+    "collective-icalendar/calendars/issue_313_globally_unique_tzid.ics",
+    // Missing UID (REQUIRED, §3.8.4.7).
+    "collective-icalendar/calendars/issue_165_missing_event.ics",
+    // `DTSTART` occurs twice on the same component (singleton property,
+    // §3.8.2.4).
+    "collective-icalendar/calendars/america_new_york_forward_reference.ics",
+    "collective-icalendar/calendars/pacific_fiji.ics",
+    // `RDATE`'s `TZID` doesn't match its component's `DTSTART` `TZID`
+    // (`DTSTART;TZID=America/New_York` vs.
+    // `RDATE;TZID="Central Standard Time"` — two different spellings for
+    // what's likely the same real-world zone, but this crate has no
+    // Windows/IANA alias table to prove that; see issue #6).
+    "collective-icalendar/calendars/issue_156_RDATE_with_PERIOD_TZID_khal.ics",
+    // `STATUS:Confirmed` — not the uppercase token RFC 5545 §3.8.1.11
+    // defines (`CONFIRMED`); this crate matches `STATUS` and every other
+    // enumerated RFC 5545 token case-sensitively, consistently.
+    "collective-icalendar/calendars/issue_218_bad_tzid.ics",
+    // `SUMMARY=testevent` — `=` instead of `:` introducing the property
+    // value.
+    "collective-icalendar/calendars/timezone_rdate.ics",
+    // `END:VCALENDARD` — a typo'd component-close keyword, so `END`
+    // doesn't match `BEGIN:VCALENDAR`.
+    "collective-icalendar/calendars/timezone_same_start_and_offset.ics",
+    // `DTSTAR` (missing the trailing `T`) instead of `DTSTART`, on both the
+    // `VEVENT` and inside `VTIMEZONE`'s `DAYLIGHT` sub-component — an
+    // unrecognized property name, so it falls back to the `Iana`/`Xprop`
+    // catch-all rather than ever setting the real `DTSTART` field.
+    "libical/1.ics",
+    // --- issue #27 bucket 4: the remaining, previously untriaged failures ---
+    // `SUMMARY` occurs twice on the same `VEVENT` (a singleton property,
+    // §3.8.7.2) — the second copy is folded across two physical lines but
+    // has (coincidentally) identical text to the first.
+    "libical/0.ics",
+    // `RDATE;VALUE=TIME:...` — `TIME` isn't a legal `RDATE` value type per
+    // §3.8.5.2's grammar (`rdtval = date-time / date / period`, no `TIME`
+    // alternative); parsed as a malformed `DATE` instead (the byte shape
+    // `083000` has neither `/` nor `T`), which surfaces as a confusing but
+    // still-correct "input is out of range" (an invalid month/day) rather
+    // than a clearer "unsupported VALUE" message.
+    "collective-icalendar/calendars/multiple_timezones.ics",
+    // A property name immediately followed by an empty physical line, then
+    // a `SP`-prefixed continuation (`VERSION\r\n\r\n :2.0\r\n`). RFC 5545's
+    // fold-removal rule operates on raw bytes — "any CRLF immediately
+    // followed by a single SP/HTAB is removed" — with no concept of
+    // "logical line", so this crate's (correct) mechanical unfolding
+    // collapses the *second* CRLF (the empty line's own terminator, which
+    // happens to be followed by a SP) into the following `:2.0`, leaving
+    // `VERSION` orphaned on its own logical line and `:2.0` starting a new
+    // one with no property name — not a bug in unfolding, but genuinely
+    // malformed input that exploits the byte-level nature of the rule.
+    "collective-icalendar/calendars/multiple_calendar_components.ics",
+    // Deliberately malformed component-property-at-calendar-level torture
+    // tests from the libical suite (`DURATION`/`SUMMARY`/`DTSTART`/etc.
+    // appearing directly under `VCALENDAR`, never inside any component) —
+    // same "unrecognized/misplaced property" shape as the existing
+    // `fuzz_testcase_*` entries above, just larger.
+    "libical/1-1.ics",
+    "libical/stresstest.ics",
+    // Fuzzer-mutated garbage (control bytes, NUL/high bytes injected
+    // mid-token, garbled component/parameter names, lone `CR`s) — the same
+    // "fuzzer-discovered crash corpus" style `libical-fuzz-corpus/` already
+    // holds, just living under `libical/` proper. Only required not to
+    // panic, like that corpus — an exact error variant/message isn't
+    // meaningful for adversarial byte noise.
+    "libical/crash.ics",
+    "libical/get_char_test.ics",
+    "libical/issue250.ics",
+    "libical/issue251.ics",
+    "libical/issue252.ics",
+    "libical/issue253.ics",
+    "libical/malloc.ics",
+    "libical/caltime.ics",
+    "libical/zday.ics",
 ];
 
-/// Files covering RFC 7953 (`VAVAILABILITY`, `rfc_7953` feature, issue #16)
-/// and RFC 9073/9074 (`VLOCATION`/`VALARM` extensions, `rfc_9074` feature,
-/// issue #17) — real-world-valid for those RFCs, and this crate *does*
-/// implement them, but every one of these particular fixtures is itself
-/// too incomplete to form a valid `icalobject` on its own (bare excerpts
-/// with no `VCALENDAR` wrapper, or missing `PRODID`/`VERSION`). Excluded
-/// from the blanket "must parse successfully" generation for that reason;
-/// each gets a dedicated assertion in `tests/out_of_scope.rs` instead, plus
-/// real parsing coverage of the wrapped equivalent in
-/// `tests/rfc_7953.rs`/`tests/rfc_9074.rs`.
+/// Files that are real-world-valid but don't form exactly one `icalobject`
+/// on their own — either too little (a bare component excerpt with no
+/// `BEGIN:VCALENDAR` wrapper at all, or missing `PRODID`/`VERSION`) or too
+/// much (several complete, individually-valid `VCALENDAR` objects
+/// concatenated in one file — `Calendar::parse` parses exactly one).
+/// Excluded from the blanket "must parse successfully" generation for that
+/// reason; each gets a dedicated assertion in `tests/out_of_scope.rs`
+/// instead.
+///
+/// Four sub-groups:
+/// - RFC 7953 (`VAVAILABILITY`, `rfc_7953` feature, issue #16) and RFC
+///   9073/9074 (`VLOCATION`/`VALARM` extensions, `rfc_9074` feature, issue #17)
+///   excerpts — this crate *does* implement the component/properties they
+///   exercise; real parsing coverage of the wrapped equivalent lives in
+///   `tests/rfc_7953.rs`/`tests/rfc_9074.rs`.
+/// - A much larger set of bare `VALARM`/`VEVENT`/`VTODO`/`VJOURNAL`/
+///   `VFREEBUSY` excerpts (plus one bare `VCARD`, `libical/issue339.ics`, which
+///   isn't even an iCalendar object) unrelated to any particular RFC feature's
+///   scope — added per issue #27.
+/// - `rfc_7529.ics` — a fully-formed, otherwise-valid calendar using RFC 7529's
+///   `RSCALE` (non-Gregorian recurrence), which this crate doesn't implement at
+///   all (see the README's "Not yet implemented" section) — unlike the excerpts
+///   above, this fails on content, not structure, but "out of scope" fits just
+///   as well for an unimplemented RFC extension.
+/// - Four `libical/` fixtures (`calendar.ics`, `classify.ics`, `incoming.ics`,
+///   `2446.ics`) that are streams of several complete `VCALENDAR` objects
+///   concatenated together (RFC 2446's iTIP worked examples, and similarly
+///   shaped ACME calendar-client test data) — each individual `VCALENDAR` is
+///   real-world-valid, but `Calendar::parse` only ever parses the first one
+///   plus whatever trailing content follows it, so these fail (on an unrelated
+///   property, or on structural trailing content) before ever reaching the
+///   "multiple objects" shape that's actually being exercised.
 const OUT_OF_SCOPE_FIXTURES: &[&str] = &[
     "collective-icalendar/availabilities/rfc_7953_1.ics",
     "collective-icalendar/availabilities/rfc_7953_2.ics",
@@ -75,6 +264,67 @@ const OUT_OF_SCOPE_FIXTURES: &[&str] = &[
     "collective-icalendar/events/rfc_9074_example_3.ics",
     "collective-icalendar/events/rfc_9074_example_4.ics",
     "collective-icalendar/events/rfc_9074_example_proximity.ics",
+    // --- issue #27 bucket 1: bare component excerpts, no VCALENDAR wrapper
+    // ---
+    "collective-icalendar/alarms/example.ics",
+    "collective-icalendar/alarms/rfc_5545_absolute_alarm_example.ics",
+    "collective-icalendar/alarms/rfc_5545_end.ics",
+    "collective-icalendar/alarms/start_date.ics",
+    "collective-icalendar/calendars/\
+     issue_178_component_with_invalid_name_represented.ics",
+    "collective-icalendar/calendars/issue_178_custom_component_contains_other.\
+     ics",
+    "collective-icalendar/calendars/issue_82_expected_output.ics",
+    "collective-icalendar/events/event_with_escaped_character1.ics",
+    "collective-icalendar/events/event_with_escaped_character2.ics",
+    "collective-icalendar/events/event_with_escaped_character3.ics",
+    "collective-icalendar/events/event_with_escaped_character4.ics",
+    "collective-icalendar/events/event_with_escaped_characters.ics",
+    "collective-icalendar/events/event_with_recurrence.ics",
+    "collective-icalendar/events/\
+     event_with_recurrence_exdates_on_different_lines.ics",
+    "collective-icalendar/events/event_with_rsvp.ics",
+    "collective-icalendar/events/event_with_unicode_fields.ics",
+    "collective-icalendar/events/event_with_unicode_organizer.ics",
+    "collective-icalendar/events/\
+     issue_100_transformed_doctests_into_unittests.ics",
+    "collective-icalendar/events/\
+     issue_101_icalendar_chokes_on_umlauts_in_organizer.ics",
+    "collective-icalendar/events/issue_104_mark_events_broken.ics",
+    "collective-icalendar/events/issue_112_missing_tzinfo_on_exdate.ics",
+    "collective-icalendar/events/issue_156_RDATE_with_PERIOD.ics",
+    "collective-icalendar/events/issue_156_RDATE_with_PERIOD_list.ics",
+    "collective-icalendar/events/issue_157_removes_trailing_semicolon.ics",
+    "collective-icalendar/events/issue_184_broken_representation_of_period.ics",
+    "collective-icalendar/events/issue_355_url_escaping.ics",
+    "collective-icalendar/events/issue_355_url_escaping_2.ics",
+    "collective-icalendar/events/issue_355_url_escaping_empty_param.ics",
+    "collective-icalendar/events/issue_464_invalid_rdate.ics",
+    "collective-icalendar/events/issue_53_description_parsed_properly.ics",
+    "collective-icalendar/events/issue_64_event_with_ascii_summary.ics",
+    "collective-icalendar/events/issue_64_event_with_non_ascii_summary.ics",
+    "collective-icalendar/events/issue_70_rrule_causes_attribute_error.ics",
+    "collective-icalendar/events/issue_82_expected_output.ics",
+    "collective-icalendar/events/rfc_7265_example_4.ics",
+    "collective-icalendar/events/rfc_7265_request_status.ics",
+    "collective-icalendar/freebusy/example.ics",
+    "collective-icalendar/journals/example.ics",
+    "collective-icalendar/timezones/issue_237_brazilia_standard.ics",
+    "collective-icalendar/timezones/issue_53_tzid_parsed_properly.ics",
+    "collective-icalendar/timezones/\
+     issue_55_parse_error_on_utc_offset_with_seconds.ics",
+    "collective-icalendar/timezones/pacific_fiji.ics",
+    "collective-icalendar/todos/example.ics",
+    "libical/8.ics",
+    "libical/issue339.ics",
+    "libical/overlaps.ics",
+    "libical/recur-errors.ics",
+    "libical/spanlist.ics",
+    "collective-icalendar/calendars/rfc_7529.ics",
+    "libical/calendar.ics",
+    "libical/classify.ics",
+    "libical/incoming.ics",
+    "libical/2446.ics",
 ];
 
 fn main() {

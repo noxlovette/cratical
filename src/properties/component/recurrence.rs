@@ -1,5 +1,3 @@
-use chrono_tz::Tz;
-
 use crate::{
     params::{TimeZoneIdentifier, ValueDataType},
     properties::{
@@ -78,10 +76,13 @@ impl ExceptionDateTimes {
         &self.value
     }
 
-    /// This `EXDATE`'s `TZID` parameter, if any — used by `build()` to
-    /// cross-check it against the component's `DTSTART` (RFC 5545 §3.8.5.1).
-    pub(crate) fn tzid(&self) -> Option<Tz> {
-        self.params.tzid.as_ref().map(TimeZoneIdentifier::tz)
+    /// This `EXDATE`'s raw `TZID` parameter text, if any — used by
+    /// `build()` to cross-check it against the component's `DTSTART` (RFC
+    /// 5545 §3.8.5.1). Compared as text rather than a resolved
+    /// [`chrono_tz::Tz`] so the check still works for a `TZID` this crate
+    /// can't resolve (issue #27 bucket 3).
+    pub(crate) fn tzid(&self) -> Option<&str> {
+        self.params.tzid.as_ref().map(TimeZoneIdentifier::as_str)
     }
 }
 
@@ -156,10 +157,13 @@ impl RecurrenceDateTimes {
         &self.value
     }
 
-    /// This `RDATE`'s `TZID` parameter, if any — used by `build()` to
-    /// cross-check it against the component's `DTSTART` (RFC 5545 §3.8.5.2).
-    pub(crate) fn tzid(&self) -> Option<Tz> {
-        self.params.tzid.as_ref().map(TimeZoneIdentifier::tz)
+    /// This `RDATE`'s raw `TZID` parameter text, if any — used by
+    /// `build()` to cross-check it against the component's `DTSTART` (RFC
+    /// 5545 §3.8.5.2). Compared as text rather than a resolved
+    /// [`chrono_tz::Tz`] so the check still works for a `TZID` this crate
+    /// can't resolve (issue #27 bucket 3).
+    pub(crate) fn tzid(&self) -> Option<&str> {
+        self.params.tzid.as_ref().map(TimeZoneIdentifier::as_str)
     }
 }
 

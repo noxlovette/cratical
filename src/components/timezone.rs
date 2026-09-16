@@ -443,6 +443,11 @@ mod tests {
     use chrono::FixedOffset;
 
     #[test]
+    // rustfmt's `format_strings` wrapping of this literal corrupts its
+    // runtime value (it splits inside a `\r\n` escape pair, not between
+    // whole escapes) — skip it here rather than let a formatting pass
+    // silently reintroduce that bug.
+    #[rustfmt::skip]
     fn timezone_builder_round_trips_a_minimal_timezone() {
         let dtstart = crate::properties::DateTimeStartBuilder::new(
             DateOrDatetime::DateTime(DateTime::Floating(
@@ -474,10 +479,7 @@ mod tests {
 
         assert_eq!(
             timezone.to_string(),
-            "BEGIN:VTIMEZONE\r\nTZID:America/New_York\r\nBEGIN:STANDARD\r\\
-             \
-             nDTSTART:20071104T020000\r\nTZOFFSETTO:-0500\r\nTZOFFSETFROM:\
-             -0400\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\n"
+            "BEGIN:VTIMEZONE\r\nTZID:America/New_York\r\nBEGIN:STANDARD\r\nDTSTART:20071104T020000\r\nTZOFFSETTO:-0500\r\nTZOFFSETFROM:-0400\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\n"
         );
     }
 

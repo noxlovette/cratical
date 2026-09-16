@@ -625,23 +625,33 @@ pub struct SentBy(CalendarUserAddress);
 /// For more information, see the sections on the value types [DateType] and
 /// [Time].
 ///
-/// This crate resolves `TZID` against [`chrono_tz::Tz`]'s IANA database
-/// rather than treating it as opaque text, so that a zoned `DATE-TIME` can be
-/// converted to its real UTC instant (RFC 5545 §3.3.5) instead of only ever
-/// being read back as floating local time. The RFC leaves the naming
-/// convention for `TZID` values unspecified (see the note above), so a
-/// deliberate choice follows from that: any `TZID` parameter value that
-/// isn't a name `chrono_tz` recognizes (a non-IANA alias, a Windows/Exchange
-/// zone name like `Eastern Standard Time`, a raw UTC offset like `UTC+11`, a
-/// display name, ...) is rejected with [`ParamError::Malformed`] rather than
-/// silently accepted as best-effort passthrough. Producers emitting such
-/// values are technically RFC-compliant (the RFC doesn't mandate IANA names)
-/// but this crate can't resolve their offset rules, so surfacing a clear
-/// parse error is preferable to guessing.
+/// This crate stores `TZID` as opaque text rather than requiring it to name
+/// a [`chrono_tz::Tz`] zone — the RFC leaves the naming convention for
+/// `TZID` values unspecified (see the note above), and real-world producers
+/// routinely emit values `chrono_tz` doesn't recognize: a non-IANA alias
+/// (`US-Eastern`), a Windows/Exchange display name (`Eastern Standard
+/// Time`), a raw UTC offset (`UTC+11`), a custom or `/`-prefixed
+/// globally-unique identifier that only resolves against a local
+/// `VTIMEZONE`, or a display name real-world producers wrap in DQUOTEs
+/// despite `TZID`'s grammar not permitting a `quoted-string` (a wrapping
+/// pair is tolerated and stripped the same way other lenient params handle
+/// non-conformant quoting elsewhere in this crate). Rejecting all of that at
+/// parse time (this crate's previous behavior, see issue #27) makes the
+/// `TZID` *parameter* unusable for any producer that doesn't happen to name
+/// a real IANA zone, even though the parameter itself is just a text
+/// reference.
+///
+/// [`resolve`](Self::resolve) is the one place `chrono_tz` still comes in:
+/// a *best-effort*, convenience lookup used only when actually computing a
+/// zoned `DATE-TIME`'s real UTC instant (RFC 5545 §3.3.5). When it returns
+/// `None` (a non-IANA name, a custom identifier, a globally-unique ID that
+/// would need a local `VTIMEZONE` this crate doesn't evaluate offset rules
+/// from), the local time is kept as `Floating` rather than guessed at —
+/// no precision is fabricated, but nothing is rejected either.
 ///
 /// [Section 3.2.19](https://datatracker.ietf.org/doc/html/rfc5545#section-3.2.19)
-#[derive(Debug, Clone)]
-pub struct TimeZoneIdentifier(Tz);
+#[derive(Debug)]
+pub struct TimeZoneIdentifier(Text);
 
 /// This parameter can be specified on properties with a
 /// CAL-ADDRESS value type.  The parameter specifies the participation
@@ -962,29 +972,35 @@ impl TryFrom<&[u8]> for TimeZoneIdentifier {
     type Error = ParamError;
 
     fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
-        let s = std::str::from_utf8(b)?;
-        let tz: Tz = s.parse().map_err(|_| ParamError::Malformed {
-            expected: "IANA timezone identifier".into(),
-            received: Some(s.into()),
-        })?;
-        Ok(Self(tz))
+        Ok(Self(maybe_quoted(b).try_into()?))
     }
 }
 
 impl TimeZoneIdentifier {
     /// Builds a `TZID` parameter directly from an already-valid
-    /// [`chrono_tz::Tz`], skipping the IANA-name text round-trip
-    /// `TryFrom<&[u8]>` requires. Infallible — every `Tz` variant is a
-    /// valid IANA zone name by construction.
+    /// [`chrono_tz::Tz`], skipping the text round-trip `TryFrom<&[u8]>`
+    /// requires. Infallible — every `Tz` variant has a valid IANA zone name
+    /// by construction.
     pub fn new(tz: Tz) -> Self {
-        Self(tz)
+        Self(tz.name().into())
     }
 
-    /// The parsed [`chrono_tz::Tz`] itself — used to resolve a zoned
-    /// `DATE-TIME` value against this `TZID`'s real offset rules (RFC 5545
-    /// §3.3.5), rather than the host machine's own time zone.
-    pub(crate) fn tz(&self) -> Tz {
-        self.0
+    /// The raw `TZID` text — used by the calendar-wide check that this
+    /// parameter's value matches a `VTIMEZONE` component's own `TZID`
+    /// property elsewhere in the object (RFC 5545 §3.2.19), and to compare
+    /// two `TZID` parameters for equality (e.g. `EXDATE`/`RDATE` against
+    /// their component's `DTSTART`) without requiring either to resolve.
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Best-effort resolution against [`chrono_tz::Tz`]'s IANA database —
+    /// `None` for any `TZID` text that isn't a name `chrono_tz` recognizes
+    /// (see the type's doc comment). Used only to compute a zoned
+    /// `DATE-TIME`'s real UTC instant (RFC 5545 §3.3.5); the `TZID` text
+    /// itself is always preserved regardless of whether this resolves.
+    pub(crate) fn resolve(&self) -> Option<Tz> {
+        self.0.parse().ok()
     }
 }
 
@@ -1578,51 +1594,90 @@ mod tests {
     fn tzid_accepts_a_clean_iana_zone_name() {
         let tz = TimeZoneIdentifier::try_from(b"America/New_York".as_slice())
             .unwrap();
-        assert_eq!(tz.tz(), Tz::America__New_York);
+        assert_eq!(tz.resolve(), Some(Tz::America__New_York));
     }
 
-    // RFC 5545 issue #5: TZID leans entirely on chrono_tz's own leniency,
-    // so these fixture-derived shapes must be confirmed to hit the
-    // `Malformed` error path rather than silently passing through as some
-    // best-effort guess (see the doc comment on `TimeZoneIdentifier`).
+    // Issue #27 bucket 3: TZID's grammar (RFC 5545 §3.2.19) is free text —
+    // this crate no longer rejects a TZID parameter for not naming a real
+    // chrono_tz zone (see the doc comment on `TimeZoneIdentifier`). Each of
+    // these fixture-derived shapes must still parse (`TryFrom` succeeds),
+    // but `resolve()` returns `None` since chrono_tz genuinely can't
+    // compute offset rules for them.
 
     #[test]
-    fn tzid_rejects_a_raw_utc_offset() {
+    fn tzid_accepts_a_raw_utc_offset_but_does_not_resolve_it() {
         // tests/fixtures/collective-icalendar/calendars/issue_218_bad_tzid.ics
-        assert!(matches!(
-            TimeZoneIdentifier::try_from(b"UTC+11".as_slice()),
-            Err(ParamError::Malformed { .. })
-        ));
+        let tz = TimeZoneIdentifier::try_from(b"UTC+11".as_slice()).unwrap();
+        assert_eq!(tz.as_str(), "UTC+11");
+        assert_eq!(tz.resolve(), None);
     }
 
     #[test]
-    fn tzid_rejects_a_space_instead_of_underscore() {
+    fn tzid_accepts_a_space_instead_of_underscore_but_does_not_resolve_it() {
         // tests/fixtures/collective-icalendar/timezones/
         // issue_55_parse_error_on_utc_offset_with_seconds.ics
-        assert!(matches!(
-            TimeZoneIdentifier::try_from(b"America/Los Angeles".as_slice()),
-            Err(ParamError::Malformed { .. })
-        ));
+        let tz =
+            TimeZoneIdentifier::try_from(b"America/Los Angeles".as_slice())
+                .unwrap();
+        assert_eq!(tz.as_str(), "America/Los Angeles");
+        assert_eq!(tz.resolve(), None);
     }
 
     #[test]
-    fn tzid_rejects_a_non_ascii_display_name() {
+    fn tzid_accepts_a_non_ascii_display_name_but_does_not_resolve_it() {
         // tests/fixtures/collective-icalendar/timezones/
         // issue_237_brazilia_standard.ics
-        assert!(matches!(
-            TimeZoneIdentifier::try_from("(UTC-03:00) Brasília".as_bytes()),
-            Err(ParamError::Malformed { .. })
-        ));
+        let tz =
+            TimeZoneIdentifier::try_from("(UTC-03:00) Brasília".as_bytes())
+                .unwrap();
+        assert_eq!(tz.as_str(), "(UTC-03:00) Brasília");
+        assert_eq!(tz.resolve(), None);
     }
 
     #[test]
-    fn tzid_rejects_a_windows_exchange_zone_name() {
+    fn tzid_accepts_a_windows_exchange_zone_name_but_does_not_resolve_it() {
         // tests/fixtures/collective-icalendar/calendars/
         // issue_836_do_not_quote_tzid.ics
-        assert!(matches!(
-            TimeZoneIdentifier::try_from(b"Eastern Standard Time".as_slice()),
-            Err(ParamError::Malformed { .. })
-        ));
+        let tz =
+            TimeZoneIdentifier::try_from(b"Eastern Standard Time".as_slice())
+                .unwrap();
+        assert_eq!(tz.as_str(), "Eastern Standard Time");
+        assert_eq!(tz.resolve(), None);
+    }
+
+    /// `TZID`'s grammar (§3.2.19) doesn't permit a `quoted-string` at all,
+    /// but real-world producers (Windows/Exchange in particular) wrap
+    /// display-name `TZID`s in DQUOTEs anyway — tolerated the same way
+    /// other lenient params handle optional quoting, and stripped rather
+    /// than kept as part of the stored text.
+    #[test]
+    fn tzid_strips_a_non_conformant_wrapping_quote_pair() {
+        // tests/fixtures/collective-icalendar/calendars/
+        // issue_156_RDATE_with_PERIOD_TZID_khal.ics
+        let tz = TimeZoneIdentifier::try_from(
+            b"\"Central Standard Time\"".as_slice(),
+        )
+        .unwrap();
+        assert_eq!(tz.as_str(), "Central Standard Time");
+    }
+
+    /// A `/`-prefixed globally-unique `TZID` (§3.2.19's `tzidprefix`) is
+    /// preserved verbatim, prefix included — this crate has no registry to
+    /// resolve it against, so it's opaque text like any other unresolvable
+    /// `TZID`.
+    #[test]
+    fn tzid_preserves_a_globally_unique_slash_prefix() {
+        // tests/fixtures/collective-icalendar/calendars/
+        // issue_313_globally_unique_tzid.ics
+        let tz = TimeZoneIdentifier::try_from(
+            b"/freeassociation.sourceforge.net/Europe/Berlin".as_slice(),
+        )
+        .unwrap();
+        assert_eq!(
+            tz.as_str(),
+            "/freeassociation.sourceforge.net/Europe/Berlin"
+        );
+        assert_eq!(tz.resolve(), None);
     }
 
     #[test]
