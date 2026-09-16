@@ -33,6 +33,14 @@
 //! the same way (`OUT_OF_SCOPE_FIXTURES`), with dedicated assertions in
 //! `tests/out_of_scope.rs` and real coverage of the wrapped equivalents in
 //! `tests/rfc_7953.rs`/`tests/rfc_9074.rs` (for the RFC 7953/9074 ones).
+//!
+//! A last handful (`ITIP_NONCONFORMANT_FIXTURES`) are real-world exports
+//! that stamp a `METHOD` but don't satisfy that method's RFC 5546
+//! restrictions (e.g. `METHOD:PUBLISH` with no `ORGANIZER`) — valid RFC
+//! 5545 objects, so they parse fine without the `rfc_5546` feature, but
+//! rejected once it's enabled. Excluded from the blanket generation only
+//! when `rfc_5546` is on (`itip_enabled` in `main`, below); each gets a
+//! dedicated assertion in `tests/rfc_5546.rs`.
 
 use std::{
     env, fs,
@@ -327,6 +335,29 @@ const OUT_OF_SCOPE_FIXTURES: &[&str] = &[
     "libical/2446.ics",
 ];
 
+/// Real-world calendar exports that are valid RFC 5545 objects but not
+/// RFC 5546 (iTIP)-conformant: each stamps a `METHOD` (`PUBLISH`/
+/// `REQUEST`) without satisfying that method's property restrictions
+/// (typically a personal alarm/reminder export tagged `METHOD:PUBLISH`
+/// with no `ORGANIZER`, or a `METHOD:REQUEST` with no `ATTENDEE`) — RFC
+/// 5545 itself doesn't require either property regardless of `METHOD`, so
+/// these parse fine without the `rfc_5546` feature. Only excluded from the
+/// blanket "must parse successfully" generation when `rfc_5546` is
+/// enabled (see `main`'s `itip_enabled` check below); each gets a
+/// dedicated assertion in `tests/rfc_5546.rs` instead, confirming it's
+/// rejected for the expected reason.
+const ITIP_NONCONFORMANT_FIXTURES: &[&str] = &[
+    "collective-icalendar/calendars/alarm_etar_future.ics",
+    "collective-icalendar/calendars/alarm_etar_notification.ics",
+    "collective-icalendar/calendars/alarm_etar_notification_clicked.ics",
+    "collective-icalendar/calendars/alarm_google_acknowledged.ics",
+    "collective-icalendar/calendars/alarm_google_future.ics",
+    "collective-icalendar/calendars/issue_350.ics",
+    "collective-icalendar/calendars/issue_836_do_not_quote_tzid.ics",
+    "collective-icalendar/calendars/timezone_same_start.ics",
+    "collective-icalendar/calendars/x_location.ics",
+];
+
 fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let fixtures_root = Path::new(&manifest_dir).join("tests/fixtures");
@@ -334,6 +365,11 @@ fn main() {
     let dest = Path::new(&out_dir).join("fixture_tests.rs");
 
     let mut out = String::new();
+    // `CARGO_FEATURE_<name>` is set by cargo iff this build's `rfc_5546`
+    // feature is enabled — used to only apply `ITIP_NONCONFORMANT_FIXTURES`
+    // when the stricter iTIP validation those fixtures fail is actually
+    // compiled in, leaving the default (no `rfc_5546`) test run unaffected.
+    let itip_enabled = env::var("CARGO_FEATURE_RFC_5546").is_ok();
 
     for dir in ["rfc5545", "rrule", "libical", "collective-icalendar"] {
         let root = fixtures_root.join(dir);
@@ -349,6 +385,9 @@ fn main() {
                 .replace('\\', "/");
             if MALFORMED_FIXTURES.contains(&rel_to_fixtures.as_str())
                 || OUT_OF_SCOPE_FIXTURES.contains(&rel_to_fixtures.as_str())
+                || (itip_enabled
+                    && ITIP_NONCONFORMANT_FIXTURES
+                        .contains(&rel_to_fixtures.as_str()))
             {
                 continue;
             }

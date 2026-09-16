@@ -34,6 +34,18 @@
   this crate implements — the `VLOCATION` sub-component nested inside
   `VALARM` (RFC 9074 §8's proximity extension) — since that's the only
   context this crate parses it in.
+- **`rfc_5546`** — **[RFC 5546](https://datatracker.ietf.org/doc/html/rfc5546)**
+  (iTIP): a typed `itip::Method` for the 8 scheduling methods
+  (`PUBLISH`/`REQUEST`/`REPLY`/`ADD`/`CANCEL`/`REFRESH`/`COUNTER`/
+  `DECLINECOUNTER`), and validation of a `VCALENDAR` against RFC 5546's
+  per-method component/property restriction tables whenever `METHOD` names
+  one of them. Only checks restrictions verifiable from a single iCalendar
+  object — see `src/itip.rs`'s module docs for what's out of scope (anything
+  requiring comparison against an earlier message) and why. Relevant if
+  you're implementing calendar scheduling (invites, RSVPs); real-world
+  calendar exports that stamp `METHOD` without full iTIP conformance (e.g. a
+  personal reminder tagged `METHOD:PUBLISH` with no `ORGANIZER`) will be
+  rejected once this is enabled — see `tests/rfc_5546.rs`.
 
 ### Not yet implemented
 
@@ -41,8 +53,6 @@ These would each be their own opt-in feature (matching the `rfc_7953`/
 `rfc_9074` pattern above) if added — none of them are needed for plain
 calendar storage/display, which is this crate's current focus:
 
-- **RFC 5546** (iTIP) — scheduling `REQUEST`/`REPLY`/`CANCEL` semantics on
-  top of `METHOD`, not just parsing a `VCALENDAR` object.
 - **RFC 7529** (`RSCALE`) — non-Gregorian recurrence rules (`RRULE`'s
   `RSCALE=CHINESE` etc.).
 - **RFC 9073** (beyond the `VLOCATION`-in-`VALARM` piece above) — structured
