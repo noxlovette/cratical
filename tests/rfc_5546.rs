@@ -108,8 +108,7 @@ fn unrecognized_method_skips_itip_validation_entirely() {
     // RFC 5546 doesn't apply and this parses fine.
     let bytes = wrap(
         "X-CUSTOM",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nEND:VEVENT\r\n",
     );
     assert!(Calendar::parse(&bytes).is_ok());
 }
@@ -120,8 +119,7 @@ fn unrecognized_method_skips_itip_validation_entirely() {
 fn vevent_publish_requires_organizer() {
     let bytes = wrap(
         "PUBLISH",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nSUMMARY:Team meeting\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nSUMMARY:Team meeting\r\nEND:VEVENT\r\n",
     );
     assert_rejected(&bytes, "MUST include ORGANIZER for METHOD:PUBLISH");
 }
@@ -130,10 +128,7 @@ fn vevent_publish_requires_organizer() {
 fn vevent_publish_rejects_an_attendee() {
     let bytes = wrap(
         "PUBLISH",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\\
-         nSUMMARY:Team \
-         meeting\r\nATTENDEE:mailto:b@example.com\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nSUMMARY:Team meeting\r\nATTENDEE:mailto:b@example.com\r\nEND:VEVENT\r\n",
     );
     assert_rejected(&bytes, "MUST NOT include ATTENDEE for METHOD:PUBLISH");
 }
@@ -142,9 +137,7 @@ fn vevent_publish_rejects_an_attendee() {
 fn vevent_publish_valid_minimal_example_parses() {
     let bytes = wrap(
         "PUBLISH",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\\
-         nSUMMARY:Team meeting\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nSUMMARY:Team meeting\r\nEND:VEVENT\r\n",
     );
     assert!(Calendar::parse(&bytes).is_ok());
 }
@@ -153,9 +146,7 @@ fn vevent_publish_valid_minimal_example_parses() {
 fn vevent_request_requires_at_least_one_attendee() {
     let bytes = wrap(
         "REQUEST",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\\
-         nSUMMARY:Team meeting\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nSUMMARY:Team meeting\r\nEND:VEVENT\r\n",
     );
     assert_rejected(&bytes, "MUST include ATTENDEE for METHOD:REQUEST");
 }
@@ -164,10 +155,7 @@ fn vevent_request_requires_at_least_one_attendee() {
 fn vevent_request_valid_minimal_example_parses() {
     let bytes = wrap(
         "REQUEST",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\\
-         nATTENDEE:mailto:b@example.com\r\nSUMMARY:Team \
-         meeting\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nATTENDEE:mailto:b@example.com\r\nSUMMARY:Team meeting\r\nEND:VEVENT\r\n",
     );
     assert!(Calendar::parse(&bytes).is_ok());
 }
@@ -176,9 +164,7 @@ fn vevent_request_valid_minimal_example_parses() {
 fn vevent_reply_requires_exactly_one_attendee() {
     let bytes = wrap(
         "REPLY",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nORGANIZER:mailto:a@example.com\r\nATTENDEE:mailto:b@example.com\r\\
-         nATTENDEE:mailto:c@example.com\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nORGANIZER:mailto:a@example.com\r\nATTENDEE:mailto:b@example.com\r\nATTENDEE:mailto:c@example.com\r\nEND:VEVENT\r\n",
     );
     assert_rejected(
         &bytes,
@@ -190,10 +176,7 @@ fn vevent_reply_requires_exactly_one_attendee() {
 fn vevent_reply_rejects_valarm() {
     let bytes = wrap(
         "REPLY",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nORGANIZER:mailto:a@example.com\r\nATTENDEE:mailto:b@example.com\r\\
-         nBEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT15M\r\nDESCRIPTION:\
-         Reminder\r\nEND:VALARM\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nORGANIZER:mailto:a@example.com\r\nATTENDEE:mailto:b@example.com\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT15M\r\nDESCRIPTION:Reminder\r\nEND:VALARM\r\nEND:VEVENT\r\n",
     );
     assert_rejected(&bytes, "MUST NOT include VALARM for METHOD:REPLY");
 }
@@ -202,9 +185,7 @@ fn vevent_reply_rejects_valarm() {
 fn vevent_add_requires_a_positive_sequence() {
     let bytes = wrap(
         "ADD",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\\
-         nSUMMARY:Extra instance\r\nSEQUENCE:0\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nSUMMARY:Extra instance\r\nSEQUENCE:0\r\nEND:VEVENT\r\n",
     );
     assert_rejected(&bytes, "SEQUENCE MUST be greater than 0 for METHOD:ADD");
 }
@@ -227,9 +208,7 @@ fn vevent_add_rejects_more_than_one_vevent() {
 fn vevent_cancel_valid_minimal_example_parses() {
     let bytes = wrap(
         "CANCEL",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nORGANIZER:mailto:a@example.com\r\nSEQUENCE:1\r\nSTATUS:CANCELLED\r\\
-         nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nORGANIZER:mailto:a@example.com\r\nSEQUENCE:1\r\nSTATUS:CANCELLED\r\nEND:VEVENT\r\n",
     );
     assert!(Calendar::parse(&bytes).is_ok());
 }
@@ -238,9 +217,7 @@ fn vevent_cancel_valid_minimal_example_parses() {
 fn vevent_refresh_rejects_a_description() {
     let bytes = wrap(
         "REFRESH",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nORGANIZER:mailto:a@example.com\r\nATTENDEE:mailto:b@example.com\r\\
-         nDESCRIPTION:please resend\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nORGANIZER:mailto:a@example.com\r\nATTENDEE:mailto:b@example.com\r\nDESCRIPTION:please resend\r\nEND:VEVENT\r\n",
     );
     assert_rejected(&bytes, "MUST NOT include DESCRIPTION for METHOD:REFRESH");
 }
@@ -249,9 +226,7 @@ fn vevent_refresh_rejects_a_description() {
 fn vevent_counter_requires_a_summary() {
     let bytes = wrap(
         "COUNTER",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\\
-         nSEQUENCE:0\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nSEQUENCE:0\r\nEND:VEVENT\r\n",
     );
     assert_rejected(&bytes, "MUST include SUMMARY for METHOD:COUNTER");
 }
@@ -260,8 +235,7 @@ fn vevent_counter_requires_a_summary() {
 fn vevent_declinecounter_requires_at_least_one_attendee() {
     let bytes = wrap(
         "DECLINECOUNTER",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nORGANIZER:mailto:a@example.com\r\nSEQUENCE:0\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nORGANIZER:mailto:a@example.com\r\nSEQUENCE:0\r\nEND:VEVENT\r\n",
     );
     assert_rejected(&bytes, "MUST include ATTENDEE for METHOD:DECLINECOUNTER");
 }
@@ -270,13 +244,7 @@ fn vevent_declinecounter_requires_at_least_one_attendee() {
 fn vevent_request_requires_matching_uid_across_components() {
     let bytes = wrap(
         "REQUEST",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\\
-         nATTENDEE:mailto:b@example.com\r\nSUMMARY:Team \
-         meeting\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:2@example.com\r\\
-         nDTSTAMP:20250101T000000Z\r\nDTSTART:20250102T100000Z\r\nORGANIZER:\
-         mailto:a@example.com\r\nATTENDEE:mailto:b@example.com\r\nSUMMARY:\
-         Team meeting (recurrence)\r\nEND:VEVENT\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nATTENDEE:mailto:b@example.com\r\nSUMMARY:Team meeting\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:2@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250102T100000Z\r\nORGANIZER:mailto:a@example.com\r\nATTENDEE:mailto:b@example.com\r\nSUMMARY:Team meeting (recurrence)\r\nEND:VEVENT\r\n",
     );
     assert_rejected(
         &bytes,
@@ -290,9 +258,7 @@ fn vevent_request_requires_matching_uid_across_components() {
 fn vtodo_publish_requires_priority() {
     let bytes = wrap(
         "PUBLISH",
-        "BEGIN:VTODO\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\\
-         nSUMMARY:Ship the report\r\nEND:VTODO\r\n",
+        "BEGIN:VTODO\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nSUMMARY:Ship the report\r\nEND:VTODO\r\n",
     );
     assert_rejected(&bytes, "MUST include PRIORITY for METHOD:PUBLISH");
 }
@@ -301,9 +267,7 @@ fn vtodo_publish_requires_priority() {
 fn vtodo_publish_valid_minimal_example_parses() {
     let bytes = wrap(
         "PUBLISH",
-        "BEGIN:VTODO\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\\
-         nPRIORITY:1\r\nSUMMARY:Ship the report\r\nEND:VTODO\r\n",
+        "BEGIN:VTODO\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nPRIORITY:1\r\nSUMMARY:Ship the report\r\nEND:VTODO\r\n",
     );
     assert!(Calendar::parse(&bytes).is_ok());
 }
@@ -315,9 +279,7 @@ fn vtodo_refresh_rejects_organizer() {
     // regression test.
     let bytes = wrap(
         "REFRESH",
-        "BEGIN:VTODO\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nATTENDEE:mailto:b@example.com\r\nORGANIZER:mailto:a@example.com\r\\
-         nEND:VTODO\r\n",
+        "BEGIN:VTODO\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nATTENDEE:mailto:b@example.com\r\nORGANIZER:mailto:a@example.com\r\nEND:VTODO\r\n",
     );
     assert_rejected(&bytes, "MUST NOT include ORGANIZER for METHOD:REFRESH");
 }
@@ -326,8 +288,7 @@ fn vtodo_refresh_rejects_organizer() {
 fn vtodo_refresh_valid_minimal_example_parses() {
     let bytes = wrap(
         "REFRESH",
-        "BEGIN:VTODO\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nATTENDEE:mailto:b@example.com\r\nEND:VTODO\r\n",
+        "BEGIN:VTODO\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nATTENDEE:mailto:b@example.com\r\nEND:VTODO\r\n",
     );
     assert!(Calendar::parse(&bytes).is_ok());
 }
@@ -338,9 +299,7 @@ fn vtodo_refresh_valid_minimal_example_parses() {
 fn vjournal_only_supports_publish_add_cancel() {
     let bytes = wrap(
         "REQUEST",
-        "BEGIN:VJOURNAL\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\\
-         nDESCRIPTION:Minutes\r\nEND:VJOURNAL\r\n",
+        "BEGIN:VJOURNAL\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nDESCRIPTION:Minutes\r\nEND:VJOURNAL\r\n",
     );
     assert_rejected(&bytes, "METHOD:REQUEST is not defined for VJOURNAL");
 }
@@ -349,9 +308,7 @@ fn vjournal_only_supports_publish_add_cancel() {
 fn vjournal_publish_valid_minimal_example_parses() {
     let bytes = wrap(
         "PUBLISH",
-        "BEGIN:VJOURNAL\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\\
-         nDESCRIPTION:Minutes\r\nEND:VJOURNAL\r\n",
+        "BEGIN:VJOURNAL\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nDESCRIPTION:Minutes\r\nEND:VJOURNAL\r\n",
     );
     assert!(Calendar::parse(&bytes).is_ok());
 }
@@ -360,9 +317,7 @@ fn vjournal_publish_valid_minimal_example_parses() {
 fn vjournal_cancel_status_must_be_cancelled_if_present() {
     let bytes = wrap(
         "CANCEL",
-        "BEGIN:VJOURNAL\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nORGANIZER:mailto:a@example.com\r\nSEQUENCE:1\r\nSTATUS:DRAFT\r\nEND:\
-         VJOURNAL\r\n",
+        "BEGIN:VJOURNAL\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nORGANIZER:mailto:a@example.com\r\nSEQUENCE:1\r\nSTATUS:DRAFT\r\nEND:VJOURNAL\r\n",
     );
     assert_rejected(
         &bytes,
@@ -376,9 +331,7 @@ fn vjournal_cancel_status_must_be_cancelled_if_present() {
 fn vfreebusy_publish_requires_organizer() {
     let bytes = wrap(
         "PUBLISH",
-        "BEGIN:VFREEBUSY\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T000000Z\r\nDTEND:20250102T000000Z\r\nEND:VFREEBUSY\\
-         r\n",
+        "BEGIN:VFREEBUSY\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T000000Z\r\nDTEND:20250102T000000Z\r\nEND:VFREEBUSY\r\n",
     );
     assert_rejected(&bytes, "MUST include ORGANIZER for METHOD:PUBLISH");
 }
@@ -387,9 +340,7 @@ fn vfreebusy_publish_requires_organizer() {
 fn vfreebusy_publish_valid_minimal_example_parses() {
     let bytes = wrap(
         "PUBLISH",
-        "BEGIN:VFREEBUSY\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T000000Z\r\nDTEND:20250102T000000Z\r\nORGANIZER:\
-         mailto:a@example.com\r\nEND:VFREEBUSY\r\n",
+        "BEGIN:VFREEBUSY\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T000000Z\r\nDTEND:20250102T000000Z\r\nORGANIZER:mailto:a@example.com\r\nEND:VFREEBUSY\r\n",
     );
     assert!(Calendar::parse(&bytes).is_ok());
 }
@@ -398,10 +349,7 @@ fn vfreebusy_publish_valid_minimal_example_parses() {
 fn vfreebusy_request_rejects_a_freebusy_property() {
     let bytes = wrap(
         "REQUEST",
-        "BEGIN:VFREEBUSY\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T000000Z\r\nDTEND:20250102T000000Z\r\nORGANIZER:\
-         mailto:a@example.com\r\nATTENDEE:mailto:b@example.com\r\nFREEBUSY:\
-         20250101T090000Z/20250101T100000Z\r\nEND:VFREEBUSY\r\n",
+        "BEGIN:VFREEBUSY\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T000000Z\r\nDTEND:20250102T000000Z\r\nORGANIZER:mailto:a@example.com\r\nATTENDEE:mailto:b@example.com\r\nFREEBUSY:20250101T090000Z/20250101T100000Z\r\nEND:VFREEBUSY\r\n",
     );
     assert_rejected(&bytes, "MUST NOT include FREEBUSY for METHOD:REQUEST");
 }
@@ -410,9 +358,7 @@ fn vfreebusy_request_rejects_a_freebusy_property() {
 fn vfreebusy_does_not_support_cancel() {
     let bytes = wrap(
         "CANCEL",
-        "BEGIN:VFREEBUSY\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T000000Z\r\nDTEND:20250102T000000Z\r\nORGANIZER:\
-         mailto:a@example.com\r\nEND:VFREEBUSY\r\n",
+        "BEGIN:VFREEBUSY\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T000000Z\r\nDTEND:20250102T000000Z\r\nORGANIZER:mailto:a@example.com\r\nEND:VFREEBUSY\r\n",
     );
     assert_rejected(&bytes, "METHOD:CANCEL is not defined for VFREEBUSY");
 }
@@ -423,12 +369,7 @@ fn vfreebusy_does_not_support_cancel() {
 fn mixing_component_types_under_one_method_is_rejected() {
     let bytes = wrap(
         "PUBLISH",
-        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\\
-         nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\\
-         nSUMMARY:Team \
-         meeting\r\nEND:VEVENT\r\nBEGIN:VTODO\r\nUID:2@example.com\r\nDTSTAMP:\
-         20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@\
-         example.com\r\nPRIORITY:1\r\nSUMMARY:Ship the report\r\nEND:VTODO\r\n",
+        "BEGIN:VEVENT\r\nUID:1@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nSUMMARY:Team meeting\r\nEND:VEVENT\r\nBEGIN:VTODO\r\nUID:2@example.com\r\nDTSTAMP:20250101T000000Z\r\nDTSTART:20250101T100000Z\r\nORGANIZER:mailto:a@example.com\r\nPRIORITY:1\r\nSUMMARY:Ship the report\r\nEND:VTODO\r\n",
     );
     assert_rejected(
         &bytes,
