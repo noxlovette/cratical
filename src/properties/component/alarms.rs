@@ -199,7 +199,7 @@ impl TriggerBuilder {
         let value = match self.value {
             DateTimeDuration::DateTime(dt) => {
                 DateTimeDuration::DateTime(match self.tzid.as_ref() {
-                    Some(tzid) => dt.resolve_tz(tzid.tz()),
+                    Some(tzid) => dt.resolve_tzid(tzid),
                     None => dt,
                 })
             }

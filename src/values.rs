@@ -53,7 +53,7 @@ impl DateOrDatetime {
     ) -> Self {
         match (self, tzid) {
             (Self::DateTime(dt), Some(tzid)) => {
-                Self::DateTime(dt.resolve_tz(tzid.tz()))
+                Self::DateTime(dt.resolve_tzid(tzid))
             }
             (value, _) => value,
         }
@@ -98,7 +98,7 @@ impl DateTimePeriod {
     ) -> Self {
         match (self, tzid) {
             (Self::DateTime(dt), Some(tzid)) => {
-                Self::DateTime(dt.resolve_tz(tzid.tz()))
+                Self::DateTime(dt.resolve_tzid(tzid))
             }
             (Self::Period(period), Some(tzid)) => {
                 Self::Period(period.resolve_tzid(tzid))
@@ -425,6 +425,18 @@ impl DateTime {
         };
         Self::Utc(utc)
     }
+
+    /// Resolves against `tzid`'s best-effort [`chrono_tz::Tz`] lookup
+    /// ([`TimeZoneIdentifier::resolve`]) when it succeeds; otherwise
+    /// returned unchanged — a `TZID` this crate can't resolve (see that
+    /// method's doc comment) leaves the value as `Floating` rather than
+    /// guessing at an offset (issue #27 bucket 3).
+    pub(crate) fn resolve_tzid(self, tzid: &TimeZoneIdentifier) -> Self {
+        match tzid.resolve() {
+            Some(tz) => self.resolve_tz(tz),
+            None => self,
+        }
+    }
 }
 
 /// The UTC offset in effect immediately before a DST "spring-forward" gap
@@ -619,14 +631,13 @@ impl Period {
     /// Resolves this period's `start`/`end` (or `start`) against `tzid`'s
     /// real offset rules (RFC 5545 §3.3.5).
     pub(crate) fn resolve_tzid(self, tzid: &TimeZoneIdentifier) -> Self {
-        let tz = tzid.tz();
         match self {
             Self::StartEnd { start, end } => Self::StartEnd {
-                start: start.resolve_tz(tz),
-                end: end.resolve_tz(tz),
+                start: start.resolve_tzid(tzid),
+                end: end.resolve_tzid(tzid),
             },
             Self::Duration { start, duration } => Self::Duration {
-                start: start.resolve_tz(tz),
+                start: start.resolve_tzid(tzid),
                 duration,
             },
         }

@@ -1,5 +1,3 @@
-use chrono_tz::Tz;
-
 use crate::{
     ast::ComponentError,
     params::{Fbtype, TimeZoneIdentifier, ValueDataType},
@@ -194,14 +192,16 @@ impl DateTimeStart {
         &self.value
     }
 
-    /// This `DTSTART`'s `TZID` parameter, if any — used by component
-    /// builders to cross-check it against `EXDATE`/`RDATE`'s own `TZID`
-    /// (RFC 5545 §3.8.5.1/§3.8.5.2).
-    pub(crate) fn tzid(&self) -> Option<Tz> {
+    /// This `DTSTART`'s raw `TZID` parameter text, if any — used by
+    /// component builders to cross-check it against `EXDATE`/`RDATE`'s own
+    /// `TZID` (RFC 5545 §3.8.5.1/§3.8.5.2). Compared as text rather than a
+    /// resolved [`chrono_tz::Tz`] so the check still works for a `TZID`
+    /// this crate can't resolve (issue #27 bucket 3).
+    pub(crate) fn tzid(&self) -> Option<&str> {
         self.params
             .tz_identifier
             .as_ref()
-            .map(TimeZoneIdentifier::tz)
+            .map(TimeZoneIdentifier::as_str)
     }
 
     /// RFC 5545 §3.8.2.2/§3.8.2.3: `DTEND`'s and `DUE`'s value type "MUST be
