@@ -4,9 +4,9 @@ mod token;
 pub(crate) use lexer::{Lexer, LexerError};
 use parser::{ParseError, ParseResult};
 
-#[cfg(feature = "rfc_7953")]
+#[cfg(feature = "rfc-7953")]
 use crate::components::availability::{Availability, Available};
-#[cfg(feature = "rfc_9074")]
+#[cfg(feature = "rfc-9074")]
 use crate::components::vlocation::VLocation;
 use crate::{
     Calendar,
@@ -189,7 +189,7 @@ enum Component {
     /// Time zone definition (`VTIMEZONE`).
     Timezone(TimezoneBuilder),
     /// Availability information (`VAVAILABILITY`, RFC 7953 §3.1).
-    #[cfg(feature = "rfc_7953")]
+    #[cfg(feature = "rfc-7953")]
     Availability(AvailabilityBuilder),
     /// An unrecognized `iana-comp`/`x-comp` (RFC 5545 §3.6). See
     /// [`UnknownComponentBuilder`].
@@ -272,7 +272,7 @@ impl From<TimezoneBuilder> for Component {
     }
 }
 
-#[cfg(feature = "rfc_7953")]
+#[cfg(feature = "rfc-7953")]
 impl From<AvailabilityBuilder> for Component {
     fn from(value: AvailabilityBuilder) -> Self {
         Self::Availability(value)
@@ -291,7 +291,7 @@ impl Component {
             Self::Journal(b) => b.ingest(p),
             Self::FreeBusy(b) => b.ingest(p),
             Self::Timezone(b) => b.ingest(p),
-            #[cfg(feature = "rfc_7953")]
+            #[cfg(feature = "rfc-7953")]
             Self::Availability(b) => b.ingest(p),
             Self::Unknown(_) => Err(ParseError::UnknownComponent),
         }
@@ -319,7 +319,7 @@ impl Component {
     /// Routes a fully-parsed `AVAILABLE` sub-component (see
     /// [`crate::ast::parser::Parser::available`]) into a builder that's
     /// allowed to contain one — `VAVAILABILITY` only (RFC 7953 §3.1).
-    #[cfg(feature = "rfc_7953")]
+    #[cfg(feature = "rfc-7953")]
     fn ingest_available(
         &mut self,
         available: AvailableBuilder,
@@ -365,7 +365,7 @@ impl Component {
             Self::Journal(b) => CalComponent::Journal(b.build()?),
             Self::FreeBusy(b) => CalComponent::FreeBusy(b.build()?),
             Self::Timezone(b) => CalComponent::Timezone(b.build()?),
-            #[cfg(feature = "rfc_7953")]
+            #[cfg(feature = "rfc-7953")]
             Self::Availability(b) => CalComponent::Availability(b.build()?),
             Self::Unknown(b) => CalComponent::Unknown(b.build()),
         })
@@ -505,18 +505,18 @@ pub(crate) enum Property {
     /// An IANA-registered property.
     Iana(Iana),
     /// `BUSYTYPE` ([`BusyType`]), RFC 7953 §3.1.
-    #[cfg(feature = "rfc_7953")]
+    #[cfg(feature = "rfc-7953")]
     BusyType(BusyType),
     /// `ACKNOWLEDGED` ([`Acknowledged`]), RFC 9074 §6.1.
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     Acknowledged(Acknowledged),
     /// `PROXIMITY` ([`Proximity`]), RFC 9074 §8.1.
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     Proximity(Proximity),
     /// `NAME` ([`Name`]), RFC 7986 §5.1.
     Name(Name),
     /// `LOCATION-TYPE` ([`LocationType`]), RFC 9073 §6.1.
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     LocationType(LocationType),
     /// `COLOR` ([`Color`]), RFC 7986 §5.9.
     Color(Color),
@@ -770,19 +770,19 @@ impl From<Iana> for Property {
         Self::Iana(value)
     }
 }
-#[cfg(feature = "rfc_7953")]
+#[cfg(feature = "rfc-7953")]
 impl From<BusyType> for Property {
     fn from(value: BusyType) -> Self {
         Self::BusyType(value)
     }
 }
-#[cfg(feature = "rfc_9074")]
+#[cfg(feature = "rfc-9074")]
 impl From<Acknowledged> for Property {
     fn from(value: Acknowledged) -> Self {
         Self::Acknowledged(value)
     }
 }
-#[cfg(feature = "rfc_9074")]
+#[cfg(feature = "rfc-9074")]
 impl From<Proximity> for Property {
     fn from(value: Proximity) -> Self {
         Self::Proximity(value)
@@ -793,7 +793,7 @@ impl From<Name> for Property {
         Self::Name(value)
     }
 }
-#[cfg(feature = "rfc_9074")]
+#[cfg(feature = "rfc-9074")]
 impl From<LocationType> for Property {
     fn from(value: LocationType) -> Self {
         Self::LocationType(value)
@@ -843,7 +843,7 @@ type PropertyParser = fn(&[u8]) -> ParseResult<Property>;
 ///
 /// Expands to the base entries above (every keyword RFC 5545 itself
 /// defines), with `$($extra)*` spliced in after them for feature-gated
-/// extensions (`rfc_7953`'s `BUSYTYPE`, `rfc_9074`'s `ACKNOWLEDGED`/
+/// extensions (`rfc-7953`'s `BUSYTYPE`, `rfc-9074`'s `ACKNOWLEDGED`/
 /// `PROXIMITY`/`NAME`/`LOCATION-TYPE`) — a `cfg` on a `phf_map!` entry isn't
 /// meaningful (the map is built by a proc macro, not expanded as ordinary
 /// items, so a nested macro call standing in for a feature's entries isn't
@@ -916,7 +916,7 @@ macro_rules! property_dispatch_map {
     };
 }
 
-#[cfg(all(feature = "rfc_7953", feature = "rfc_9074"))]
+#[cfg(all(feature = "rfc-7953", feature = "rfc-9074"))]
 static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> = property_dispatch_map! {
     b"BUSYTYPE" => |v| BusyType::try_from(v).map(Into::into),
     b"ACKNOWLEDGED" => |v| Acknowledged::try_from(v).map(Into::into),
@@ -924,19 +924,19 @@ static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> = property_dis
     b"LOCATION-TYPE" => |v| LocationType::try_from(v).map(Into::into),
 };
 
-#[cfg(all(feature = "rfc_7953", not(feature = "rfc_9074")))]
+#[cfg(all(feature = "rfc-7953", not(feature = "rfc-9074")))]
 static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> = property_dispatch_map! {
     b"BUSYTYPE" => |v| BusyType::try_from(v).map(Into::into),
 };
 
-#[cfg(all(not(feature = "rfc_7953"), feature = "rfc_9074"))]
+#[cfg(all(not(feature = "rfc-7953"), feature = "rfc-9074"))]
 static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> = property_dispatch_map! {
     b"ACKNOWLEDGED" => |v| Acknowledged::try_from(v).map(Into::into),
     b"PROXIMITY" => |v| Proximity::try_from(v).map(Into::into),
     b"LOCATION-TYPE" => |v| LocationType::try_from(v).map(Into::into),
 };
 
-#[cfg(not(any(feature = "rfc_7953", feature = "rfc_9074")))]
+#[cfg(not(any(feature = "rfc-7953", feature = "rfc-9074")))]
 static PROPERTY_DISPATCH: phf::Map<&'static [u8], PropertyParser> =
     property_dispatch_map! {};
 
@@ -1015,7 +1015,7 @@ impl CalendarBuilder {
             .collect::<Result<Vec<_>, _>>()?;
         validate_timezones(&components)?;
         validate_no_duplicate_uid(&components)?;
-        #[cfg(feature = "rfc_5546")]
+        #[cfg(feature = "rfc-5546")]
         if let Some(method) = &self.method {
             crate::itip::validate(method, &components)?;
         }
@@ -1103,7 +1103,7 @@ fn validate_no_duplicate_uid(
             CalComponent::FreeBusy(_)
             | CalComponent::Timezone(_)
             | CalComponent::Unknown(_) => continue,
-            #[cfg(feature = "rfc_7953")]
+            #[cfg(feature = "rfc-7953")]
             CalComponent::Availability(_) => continue,
         };
         if seen.contains(&(uid, recurid)) {
@@ -1181,8 +1181,8 @@ pub enum ComponentError {
 
     /// An RFC 5546 (iTIP) restriction was violated by a `VCALENDAR` whose
     /// `METHOD` names one of the 8 recognized iTIP methods. Only checked
-    /// when the `rfc_5546` feature is enabled.
-    #[cfg(feature = "rfc_5546")]
+    /// when the `rfc-5546` feature is enabled.
+    #[cfg(feature = "rfc-5546")]
     #[error(transparent)]
     Itip(#[from] crate::itip::ItipError),
 }
@@ -1597,17 +1597,17 @@ struct AlarmBuilder {
     attendee: Vec<Attendee>,
     attach: Vec<Attachment>,
     // RFC 9074 §4/§5/§6.1/§8.1 `VALARM` extensions.
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     uid: Option<Uid>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     related: Vec<RelatedTo>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     acknowledged: Option<Acknowledged>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     proximity: Option<Proximity>,
     // RFC 9073 §7.2 `VLOCATION` sub-components — legal only alongside
     // `PROXIMITY` (RFC 9074 §8), a cross-field rule checked in `build()`.
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     locations: Vec<VLocationBuilder>,
     xprop: Vec<Xprop>,
     iana: Vec<Iana>,
@@ -1702,11 +1702,11 @@ impl AlarmBuilder {
             ActionEnum::Iana(_) | ActionEnum::XName(_) => {}
         }
 
-        #[cfg(feature = "rfc_9074")]
+        #[cfg(feature = "rfc-9074")]
         if !self.locations.is_empty() && self.proximity.is_none() {
             return Err(ComponentError::Requires("VLOCATION", "PROXIMITY"));
         }
-        #[cfg(feature = "rfc_9074")]
+        #[cfg(feature = "rfc-9074")]
         let locations = self
             .locations
             .into_iter()
@@ -1722,15 +1722,15 @@ impl AlarmBuilder {
             summary: self.summary,
             attendee: self.attendee,
             attach: self.attach,
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             uid: self.uid,
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             related: self.related,
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             acknowledged: self.acknowledged,
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             proximity: self.proximity,
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             locations,
             xprop: self.xprop,
             iana: self.iana,
@@ -1753,15 +1753,15 @@ impl PropertyIngest for AlarmBuilder {
             Property::Summary(v) => set_once(&mut self.summary, v, "SUMMARY"),
             Property::Attendee(v) => push_ok(&mut self.attendee, v),
             Property::Attachment(v) => push_ok(&mut self.attach, v),
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             Property::Uid(v) => set_once(&mut self.uid, v, "UID"),
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             Property::RelatedTo(v) => push_ok(&mut self.related, v),
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             Property::Acknowledged(v) => {
                 set_once(&mut self.acknowledged, v, "ACKNOWLEDGED")
             }
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             Property::Proximity(v) => {
                 set_once(&mut self.proximity, v, "PROXIMITY")
             }
@@ -1776,7 +1776,7 @@ impl PropertyIngest for AlarmBuilder {
 /// when a `PROXIMITY` property is also present (RFC 9074 §8) — same shape
 /// as `AlarmBuilder.locations`'s sibling builders elsewhere in this module
 /// (e.g. `AvailableBuilder`).
-#[cfg(feature = "rfc_9074")]
+#[cfg(feature = "rfc-9074")]
 #[derive(Debug, Default)]
 struct VLocationBuilder {
     uid: Option<Uid>,
@@ -1789,7 +1789,7 @@ struct VLocationBuilder {
     iana: Vec<Iana>,
 }
 
-#[cfg(feature = "rfc_9074")]
+#[cfg(feature = "rfc-9074")]
 impl VLocationBuilder {
     fn new() -> Self {
         Self::default()
@@ -1811,7 +1811,7 @@ impl VLocationBuilder {
     }
 }
 
-#[cfg(feature = "rfc_9074")]
+#[cfg(feature = "rfc-9074")]
 impl PropertyIngest for VLocationBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {
@@ -2203,7 +2203,7 @@ impl PropertyIngest for TzPropBuilder {
 /// `AVAILABLE` sub-components (see
 /// [`crate::ast::parser::Parser::available`]) — same shape as
 /// `EventBuilder.alarms`/`TodoBuilder.alarms`.
-#[cfg(feature = "rfc_7953")]
+#[cfg(feature = "rfc-7953")]
 #[derive(Debug, Default)]
 struct AvailabilityBuilder {
     dtstamp: Option<DateTimeStamp>,
@@ -2230,7 +2230,7 @@ struct AvailabilityBuilder {
     available: Vec<AvailableBuilder>,
 }
 
-#[cfg(feature = "rfc_7953")]
+#[cfg(feature = "rfc-7953")]
 impl AvailabilityBuilder {
     fn new() -> Self {
         Self::default()
@@ -2286,7 +2286,7 @@ impl AvailabilityBuilder {
     }
 }
 
-#[cfg(feature = "rfc_7953")]
+#[cfg(feature = "rfc-7953")]
 impl PropertyIngest for AvailabilityBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {
@@ -2345,7 +2345,7 @@ impl PropertyIngest for AvailabilityBuilder {
 
 /// Builder for `AVAILABLE` (RFC 7953 §3.1), nested only inside a
 /// `VAVAILABILITY` component.
-#[cfg(feature = "rfc_7953")]
+#[cfg(feature = "rfc-7953")]
 #[derive(Debug, Default)]
 struct AvailableBuilder {
     dtstamp: Option<DateTimeStamp>,
@@ -2369,7 +2369,7 @@ struct AvailableBuilder {
     iana: Vec<Iana>,
 }
 
-#[cfg(feature = "rfc_7953")]
+#[cfg(feature = "rfc-7953")]
 impl AvailableBuilder {
     fn new() -> Self {
         Self::default()
@@ -2418,7 +2418,7 @@ impl AvailableBuilder {
     }
 }
 
-#[cfg(feature = "rfc_7953")]
+#[cfg(feature = "rfc-7953")]
 impl PropertyIngest for AvailableBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {

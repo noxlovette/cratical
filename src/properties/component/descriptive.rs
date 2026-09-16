@@ -663,7 +663,7 @@ impl std::fmt::Display for Status {
     }
 }
 
-#[cfg(feature = "rfc_5546")]
+#[cfg(feature = "rfc-5546")]
 impl Status {
     /// The parsed `STATUS` token, to check it against RFC 5546's
     /// per-METHOD restrictions on which values are allowed (e.g. `CANCEL`

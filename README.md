@@ -23,18 +23,18 @@
 
 ### Feature-gated (opt out by disabling default features)
 
-- **`rfc_7953`** — **[RFC 7953](https://datatracker.ietf.org/doc/html/rfc7953)**:
+- **`rfc-7953`** — **[RFC 7953](https://datatracker.ietf.org/doc/html/rfc7953)**:
   the `VAVAILABILITY`/`AVAILABLE` components for publishing free/busy
   availability. Relevant if you're building a scheduling server; skip it for
   plain calendar storage/display.
-- **`rfc_9074`** — **[RFC 9074](https://datatracker.ietf.org/doc/html/rfc9074)**:
+- **`rfc-9074`** — **[RFC 9074](https://datatracker.ietf.org/doc/html/rfc9074)**:
   `VALARM`'s `UID`/`RELATED-TO`/`ACKNOWLEDGED`/`PROXIMITY` extensions, for
   deduplicating and syncing alarms across devices. Also currently carries the
   one piece of **[RFC 9073](https://datatracker.ietf.org/doc/html/rfc9073)**
   this crate implements — the `VLOCATION` sub-component nested inside
   `VALARM` (RFC 9074 §8's proximity extension) — since that's the only
   context this crate parses it in.
-- **`rfc_5546`** — **[RFC 5546](https://datatracker.ietf.org/doc/html/rfc5546)**
+- **`rfc-5546`** — **[RFC 5546](https://datatracker.ietf.org/doc/html/rfc5546)**
   (iTIP): a typed `itip::Method` for the 8 scheduling methods
   (`PUBLISH`/`REQUEST`/`REPLY`/`ADD`/`CANCEL`/`REFRESH`/`COUNTER`/
   `DECLINECOUNTER`), and validation of a `VCALENDAR` against RFC 5546's
@@ -49,8 +49,8 @@
 
 ### Not yet implemented
 
-These would each be their own opt-in feature (matching the `rfc_7953`/
-`rfc_9074` pattern above) if added — none of them are needed for plain
+These would each be their own opt-in feature (matching the `rfc-7953`/
+`rfc-9074` pattern above) if added — none of them are needed for plain
 calendar storage/display, which is this crate's current focus:
 
 - **RFC 7529** (`RSCALE`) — non-Gregorian recurrence rules (`RRULE`'s

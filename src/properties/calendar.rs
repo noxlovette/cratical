@@ -101,7 +101,7 @@ impl std::fmt::Display for Method {
     }
 }
 
-#[cfg(feature = "rfc_5546")]
+#[cfg(feature = "rfc-5546")]
 impl Method {
     /// The raw `METHOD` token, e.g. `"REQUEST"` — used by
     /// [`crate::itip::Method::recognized`] to match it against RFC 5546's
