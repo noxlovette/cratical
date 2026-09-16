@@ -663,6 +663,16 @@ impl std::fmt::Display for Status {
     }
 }
 
+#[cfg(feature = "rfc_5546")]
+impl Status {
+    /// The parsed `STATUS` token, to check it against RFC 5546's
+    /// per-METHOD restrictions on which values are allowed (e.g. `CANCEL`
+    /// of a `VEVENT` restricts this to `CANCELLED`).
+    pub(crate) fn kind(&self) -> &StatusValue {
+        &self.value
+    }
+}
+
 /// The full set of `STATUS` wire tokens across `VEVENT`, `VTODO`, and
 /// `VJOURNAL`. The raw property text alone doesn't say which component a
 /// `STATUS` belongs to (and `CANCELLED` is valid for all three), so parsing

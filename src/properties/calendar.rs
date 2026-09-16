@@ -101,6 +101,16 @@ impl std::fmt::Display for Method {
     }
 }
 
+#[cfg(feature = "rfc_5546")]
+impl Method {
+    /// The raw `METHOD` token, e.g. `"REQUEST"` — used by
+    /// [`crate::itip::Method::recognized`] to match it against RFC 5546's
+    /// 8 defined scheduling methods.
+    pub(crate) fn value(&self) -> &str {
+        self.value.as_str()
+    }
+}
+
 impl std::fmt::Display for ProductIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "PRODID{}:{}", self.params, self.value)

@@ -11,6 +11,11 @@ pub mod components;
 pub mod properties;
 mod rrule;
 pub use rrule::*;
+/// RFC 5546: the iCalendar Transport-Independent Interoperability Protocol
+/// (iTIP), which defines the scheduling semantics layered on top of RFC
+/// 5545's `METHOD` property.
+#[cfg(feature = "rfc_5546")]
+pub mod itip;
 
 /// Alias for emails. TODO: enforce email safety
 pub type Email = String;

@@ -27,3 +27,8 @@ rfc_7953 = []
 # RFC 9073 VLOCATION (nested inside VALARM) and the RFC 9074 VALARM
 # extensions (UID, RELATED-TO, ACKNOWLEDGED, PROXIMITY).
 rfc_9074 = []
+# RFC 5546: iTIP, the iCalendar Transport-Independent Interoperability
+# Protocol. Adds a typed scheduling `METHOD` (`itip::Method`) and validates
+# a VCALENDAR against RFC 5546's per-METHOD component/property restriction
+# tables whenever METHOD names one of the 8 recognized iTIP methods.
+rfc_5546 = []

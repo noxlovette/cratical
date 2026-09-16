@@ -1015,6 +1015,10 @@ impl CalendarBuilder {
             .collect::<Result<Vec<_>, _>>()?;
         validate_timezones(&components)?;
         validate_no_duplicate_uid(&components)?;
+        #[cfg(feature = "rfc_5546")]
+        if let Some(method) = &self.method {
+            crate::itip::validate(method, &components)?;
+        }
 
         Ok(Calendar {
             prodid,
@@ -1174,6 +1178,13 @@ pub enum ComponentError {
          RECURRENCE-ID"
     )]
     DuplicateUid(String),
+
+    /// An RFC 5546 (iTIP) restriction was violated by a `VCALENDAR` whose
+    /// `METHOD` names one of the 8 recognized iTIP methods. Only checked
+    /// when the `rfc_5546` feature is enabled.
+    #[cfg(feature = "rfc_5546")]
+    #[error(transparent)]
+    Itip(#[from] crate::itip::ItipError),
 }
 
 #[derive(Debug, Default)]
