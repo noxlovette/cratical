@@ -1,5 +1,9 @@
 # Cratical
 
+[![crates.io](https://img.shields.io/crates/v/cratical.svg)](https://crates.io/crates/cratical)
+[![docs.rs](https://img.shields.io/docsrs/cratical)](https://docs.rs/cratical)
+[![CI](https://github.com/noxlovette/cratical/actions/workflows/rust.yml/badge.svg)](https://github.com/noxlovette/cratical/actions/workflows/rust.yml)
+
 > The name is inspired by the libical repo. In our case, it's crate + ical
 
 ## RFC coverage
