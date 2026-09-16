@@ -1,4 +1,5 @@
-//! Regression coverage for malformed / real-world-broken input (issue #4).
+//! Regression coverage for malformed / real-world-broken input (issue #4),
+//! plus genuinely RFC 5545-invalid fixtures more broadly (issue #27).
 //!
 //! Every fixture used here is deliberately invalid — a real-world-broken
 //! export, an RFC violation, or a fuzzer-found edge case — and is excluded
@@ -9,6 +10,13 @@
 //! "doesn't panic": per the issue, a panic on malformed input is always a
 //! bug, since `Calendar::parse` is documented to return `Result`, never to
 //! abort the process.
+//!
+//! The issue #27 bucket-2 tests further down this file cover fixtures that
+//! are real-world exports or hand-authored test fixtures which happen to
+//! skip a required property (`DTSTAMP`/`PRODID`/`DTSTART`), have zero
+//! components under `VCALENDAR`, or are otherwise grammatically invalid —
+//! `Calendar::parse` returning `Err` is correct per RFC 5545, even though
+//! real-world producers often emit exactly this shape.
 //!
 //! `CalendarParseError`'s `Lexer`/`Parse` payload types
 //! (`ast::LexerError`/`ast::parser::ParseError`) aren't publicly reachable
@@ -225,6 +233,666 @@ fn lone_cr_inside_vtimezone_is_a_lexer_error() {
 #[test]
 fn whitespace_around_property_and_param_names_is_a_parse_error() {
     let bytes = fixture("issue_351_whitespace_in_property_and_params.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+// --- issue #27 bucket 2: genuinely RFC 5545-invalid content ---
+//
+// Every fixture below is a real-world export or hand-authored test fixture
+// that skips a required property, has zero components, or is otherwise
+// grammatically invalid per RFC 5545 — `Calendar::parse` returning `Err` is
+// correct behavior for each, same philosophy as the fixtures above.
+
+fn fixture_at(rel: &str) -> Vec<u8> {
+    let path = format!("{}/tests/fixtures/{rel}", env!("CARGO_MANIFEST_DIR"));
+    std::fs::read(&path)
+        .unwrap_or_else(|e| panic!("fixture {rel} should be readable: {e}"))
+}
+
+// Missing `DTSTAMP` (REQUIRED, RFC 5545 §3.6.1 etc.).
+
+/// Missing DTSTAMP (REQUIRED, RFC 5545 §3.6.1) on its VEVENT.
+#[test]
+fn dtstamp_missing_created_calendar_with_unicode_fields() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/created_calendar_with_unicode_fields.\
+         ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTAMP (REQUIRED, §3.6.1) on its VEVENT.
+#[test]
+fn dtstamp_missing_example() {
+    let bytes = fixture_at("collective-icalendar/calendars/example.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTAMP on its components (REQUIRED, §3.6.1/§3.6.2).
+#[test]
+fn dtstamp_missing_issue_1050_calendar_with_events_and_todos() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/\
+         issue_1050_calendar_with_events_and_todos.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTAMP (REQUIRED, §3.6.1).
+#[test]
+fn dtstamp_missing_issue_1050_forward_timezone_reference() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1050_forward_timezone_reference.\
+         ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTAMP (REQUIRED, §3.6.1).
+#[test]
+fn dtstamp_missing_issue_1050_simple_calendar() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1050_simple_calendar.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTAMP (REQUIRED, §3.6.1) alongside an RRULE.
+#[test]
+fn dtstamp_missing_issue_1081_event_with_rrule() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1081_event_with_rrule.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTAMP (REQUIRED, §3.6.1).
+#[test]
+fn dtstamp_missing_issue_1081_list_of_properties() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1081_list_of_properties.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTAMP (REQUIRED, §3.6.1).
+#[test]
+fn dtstamp_missing_issue_1081_tzid_param() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/issue_1081_tzid_param.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTAMP (REQUIRED, §3.6.1) on a recurring VEVENT.
+#[test]
+fn dtstamp_missing_issue_1231_recurrence() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/issue_1231_recurrence.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTAMP (REQUIRED, §3.6.1).
+#[test]
+fn dtstamp_missing_issue_1426() {
+    let bytes = fixture_at("collective-icalendar/calendars/issue_1426.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTAMP (REQUIRED, §3.6.1).
+#[test]
+fn dtstamp_missing_issue_1426_value_parameters() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1426_value_parameters.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTAMP (REQUIRED, §3.6.1) — the libical suite's core RFC 2445-era
+/// regression fixture.
+#[test]
+fn dtstamp_missing_2445() {
+    let bytes = fixture_at("libical/2445.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTAMP (REQUIRED, §3.6.1) on one of its many VEVENTs.
+#[test]
+fn dtstamp_missing_large() {
+    let bytes = fixture_at("libical/large.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+// Missing `PRODID` (REQUIRED at `VCALENDAR` level, §3.4).
+
+/// Missing PRODID (REQUIRED at VCALENDAR level, §3.4).
+#[test]
+fn prodid_missing_issue_168_expected_output() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_168_expected_output.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing PRODID (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_issue_178_custom_component_inside_other() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/\
+         issue_178_custom_component_inside_other.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing PRODID (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_issue_322_expected_calendar() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_322_expected_calendar.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing PRODID (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_issue_722_missing_timezones() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_722_missing_timezones.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing PRODID (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_issue_798_freebusy() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/issue_798_freebusy.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing PRODID (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_issue_798_related_to() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/issue_798_related_to.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing PRODID (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_period_with_timezone() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/period_with_timezone.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing PRODID (REQUIRED, §3.4) — a bare RDATE example lifted from the RFC
+/// text.
+#[test]
+fn prodid_missing_rfc_5545_rdate_example() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/rfc_5545_RDATE_example.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing PRODID (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_rfc_6868() {
+    let bytes = fixture_at("collective-icalendar/calendars/rfc_6868.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing PRODID (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_rfc_7256_multi_value_parameters() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/rfc_7256_multi_value_parameters.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing PRODID (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_rfc_7986_conferences() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/rfc_7986_conferences.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing PRODID (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_rfc_7986_image() {
+    let bytes = fixture_at("collective-icalendar/calendars/rfc_7986_image.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing PRODID (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_smallcluster() {
+    let bytes = fixture_at("libical/smallcluster.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+// Missing `DTSTART` — none of these set a calendar-level `METHOD`, so per
+// §3.6.1's grammar `DTSTART` is REQUIRED (it's only optional when `METHOD` is
+// present).
+
+/// Missing DTSTART on a VEVENT with no calendar-level METHOD set, so per
+/// §3.6.1's grammar DTSTART is REQUIRED (it's only optional when METHOD is
+/// present).
+#[test]
+fn dtstart_missing_issue_1050_multiple_calendars() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1050_multiple_calendars.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTART, no calendar-level METHOD (REQUIRED per §3.6.1).
+#[test]
+fn dtstart_missing_issue_1050_uid_in_description() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1050_uid_in_description.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTART, no calendar-level METHOD (REQUIRED per §3.6.1).
+#[test]
+fn dtstart_missing_issue_1081_with_summary() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1081_with_summary.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTART, no calendar-level METHOD (REQUIRED per §3.6.1).
+#[test]
+fn dtstart_missing_issue_1549_binary_attachment() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1549_binary_attachment.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTART, no calendar-level METHOD (REQUIRED per §3.6.1).
+#[test]
+fn dtstart_missing_rfc_9253_gap() {
+    let bytes = fixture_at("collective-icalendar/calendars/rfc_9253_gap.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing DTSTART, no calendar-level METHOD (REQUIRED per §3.6.1).
+#[test]
+fn dtstart_missing_rfc_9253_related_to() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/rfc_9253_related_to.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+// "Premature end of input": an empty `RDATE:` value, a `FREEBUSY`/`RDATE`
+// `PERIOD` using bare `DATE` instead of the required `DATE-TIME` on both sides,
+// a truncated `DATE-TIME` missing its seconds component, or (`restriction.ics`)
+// deliberately duplicated singleton properties.
+
+/// An empty RDATE: value — the grammar requires >=1 rdtval.
+#[test]
+fn premature_end_issue_1081_empty_rdate() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/issue_1081_empty_rdate.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// A FREEBUSY PERIOD value using bare DATE instead of the required DATE-TIME on
+/// both sides (e.g. `19970101/19970102`).
+#[test]
+fn premature_end_issue_1633_freebusy_with_dates() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1633_freebusy_with_dates.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// An RDATE PERIOD value using bare DATE instead of the required DATE-TIME on
+/// both sides.
+#[test]
+fn premature_end_issue_1633_rdate_with_dates() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1633_rdate_with_dates.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// An RDATE PERIOD value using bare DATE instead of the required DATE-TIME on
+/// both sides, with a TZID param present.
+#[test]
+fn premature_end_issue_1633_rdate_with_dates_and_tzid() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1633_rdate_with_dates_and_tzid.\
+         ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// A truncated DATE-TIME missing its seconds component (e.g. `19970901T1300Z`
+/// instead of `T130000Z`).
+#[test]
+fn premature_end_2() {
+    let bytes = fixture_at("libical/2.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// A truncated DATE-TIME missing its seconds component.
+#[test]
+fn premature_end_process_calendar() {
+    let bytes = fixture_at("libical/process-calendar.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// A truncated DATE-TIME missing its seconds component.
+#[test]
+fn premature_end_process_incoming() {
+    let bytes = fixture_at("libical/process-incoming.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Deliberately duplicates singleton properties (RECURRENCE-ID, SEQUENCE,
+/// CATEGORIES, CLASS each appear twice) — reads like a purpose-built
+/// cardinality-restriction violation test.
+#[test]
+fn premature_end_restriction() {
+    let bytes = fixture_at("libical/restriction.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+// Zero components under `VCALENDAR` (the grammar requires `component =
+// 1*(eventc/todoc/...)`), or a malformed `VCALENDAR` closing (trailing garbage,
+// missing `END`).
+
+/// Zero components under VCALENDAR — the grammar requires component =
+/// 1*(eventc/todoc/...).
+#[test]
+fn zero_components_calendar_with_unicode() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/calendar_with_unicode.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Zero components under VCALENDAR, only calendar-level properties.
+#[test]
+fn zero_components_empty() {
+    let bytes = fixture_at("collective-icalendar/calendars/empty.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// A bare garbage `X` line after END:VEVENT, so the calendar fails to close
+/// cleanly.
+#[test]
+fn zero_components_issue_104_broken_calendar() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_104_broken_calendar.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Zero components under VCALENDAR.
+#[test]
+fn zero_components_issue_1050_empty_calendar() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1050_empty_calendar.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Zero components under VCALENDAR.
+#[test]
+fn zero_components_issue_1238() {
+    let bytes = fixture_at("collective-icalendar/calendars/issue_1238.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing END:VCALENDAR entirely.
+#[test]
+fn zero_components_pr_480_summary_with_colon() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/pr_480_summary_with_colon.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Zero components under VCALENDAR — a bare RFC 7265 calprops excerpt.
+#[test]
+fn zero_components_rfc_7265_example_1() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/rfc_7265_example_1.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Zero components under VCALENDAR — a fully RFC 7986-correct set of
+/// calendar-level properties is still invalid on its own without >=1 component.
+#[test]
+fn zero_components_rfc_7986_properties() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/rfc_7986_properties.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Zero components under VCALENDAR.
+#[test]
+fn zero_components_time() {
+    let bytes = fixture_at("collective-icalendar/calendars/time.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+// Malformed parameter syntax.
+
+/// Malformed parameter syntax.
+#[test]
+fn param_syntax_issue_168_input() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/issue_168_input.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Malformed parameter syntax.
+#[test]
+fn param_syntax_issue_348_exception_parsing_value() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_348_exception_parsing_value.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+// A `VALARM` with `ACTION:DISPLAY` missing `DESCRIPTION` (required, §3.6.6).
+
+/// A VALARM with ACTION:DISPLAY missing DESCRIPTION (required by §3.6.6).
+#[test]
+fn description_missing_issue_1050_all_components() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1050_all_components.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+// Invalid UTF-8 / control characters.
+
+/// Invalid UTF-8 / control characters in the input.
+#[test]
+fn invalid_utf8_issue_1081_invalid_start_valid_end() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_1081_invalid_start_valid_end.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+// A malformed `IMAGE` property value.
+
+/// A malformed IMAGE property value.
+#[test]
+fn malformed_image_issue_1561_image_value() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/issue_1561_image_value.ics");
     assert!(matches!(
         Calendar::parse(&bytes),
         Err(CalendarParseError::Parse(_))
