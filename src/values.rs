@@ -1660,12 +1660,17 @@ mod recurrence {
         }
     }
 
-    /// Parses a COMMA-separated `BYxxx` list into its element type.
+    /// Parses a COMMA-separated `BYxxx` list into its element type. Each
+    /// element is trimmed of surrounding ASCII whitespace before parsing —
+    /// RFC 5545's grammar doesn't allow it (`byday-list = weekdaynum
+    /// *("," weekdaynum)`, no `SP` around the COMMA), but real-world
+    /// producers (Microsoft Exchange in particular, e.g.
+    /// `BYDAY=MO, TU, WE`) emit a space after the separator anyway.
     fn parse_list<T, E>(
         value: &str,
         parse_one: impl Fn(&str) -> Result<T, E>,
     ) -> Result<Vec<T>, E> {
-        value.split(',').map(parse_one).collect()
+        value.split(',').map(str::trim).map(parse_one).collect()
     }
 
     impl TryFrom<&[u8]> for Recur {

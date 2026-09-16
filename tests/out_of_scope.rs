@@ -718,3 +718,16 @@ fn out_of_scope_libical_spanlist() {
         Err(CalendarParseError::Parse(_))
     ));
 }
+
+/// A fully-formed, otherwise-valid calendar using RFC 7529's `RSCALE`
+/// (non-Gregorian recurrence), which this crate doesn't implement at all
+/// (see the README's "Not yet implemented" section). Still an `Err`, but on
+/// content rather than structure — unlike the bare excerpts above.
+#[test]
+fn out_of_scope_rfc_7529_rscale_not_implemented() {
+    let bytes = fixture("calendars/rfc_7529.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}

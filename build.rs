@@ -135,6 +135,47 @@ const MALFORMED_FIXTURES: &[&str] = &[
     "collective-icalendar/calendars/issue_1081_invalid_start_valid_end.ics",
     // Malformed IMAGE value.
     "collective-icalendar/calendars/issue_1561_image_value.ics",
+    // --- issue #27 bucket 3 follow-up: fixtures unblocked by the TZID
+    // fix (TimeZoneIdentifier no longer hard-rejects a non-IANA name) but
+    // still genuinely invalid for an unrelated reason. ---
+    // Missing PRODID (REQUIRED at VCALENDAR level, §3.4).
+    "collective-icalendar/calendars/america_new_york.ics",
+    "collective-icalendar/calendars/\
+     issue_237_fail_to_parse_timezone_with_non_ascii_tzid.ics",
+    "collective-icalendar/calendars/issue_466_convert_tzid_with_slash.ics",
+    "collective-icalendar/calendars/issue_466_respect_unique_timezone.ics",
+    "collective-icalendar/calendars/issue_722_missing_VTIMEZONE_custom.ics",
+    "collective-icalendar/calendars/issue_722_timezone_transition_ambiguity.\
+     ics",
+    // Missing DTSTAMP (REQUIRED, §3.6.1).
+    "collective-icalendar/calendars/issue_313_globally_unique_tzid.ics",
+    // Missing UID (REQUIRED, §3.8.4.7).
+    "collective-icalendar/calendars/issue_165_missing_event.ics",
+    // `DTSTART` occurs twice on the same component (singleton property,
+    // §3.8.2.4).
+    "collective-icalendar/calendars/america_new_york_forward_reference.ics",
+    "collective-icalendar/calendars/pacific_fiji.ics",
+    // `RDATE`'s `TZID` doesn't match its component's `DTSTART` `TZID`
+    // (`DTSTART;TZID=America/New_York` vs.
+    // `RDATE;TZID="Central Standard Time"` — two different spellings for
+    // what's likely the same real-world zone, but this crate has no
+    // Windows/IANA alias table to prove that; see issue #6).
+    "collective-icalendar/calendars/issue_156_RDATE_with_PERIOD_TZID_khal.ics",
+    // `STATUS:Confirmed` — not the uppercase token RFC 5545 §3.8.1.11
+    // defines (`CONFIRMED`); this crate matches `STATUS` and every other
+    // enumerated RFC 5545 token case-sensitively, consistently.
+    "collective-icalendar/calendars/issue_218_bad_tzid.ics",
+    // `SUMMARY=testevent` — `=` instead of `:` introducing the property
+    // value.
+    "collective-icalendar/calendars/timezone_rdate.ics",
+    // `END:VCALENDARD` — a typo'd component-close keyword, so `END`
+    // doesn't match `BEGIN:VCALENDAR`.
+    "collective-icalendar/calendars/timezone_same_start_and_offset.ics",
+    // `DTSTAR` (missing the trailing `T`) instead of `DTSTART`, on both the
+    // `VEVENT` and inside `VTIMEZONE`'s `DAYLIGHT` sub-component — an
+    // unrecognized property name, so it falls back to the `Iana`/`Xprop`
+    // catch-all rather than ever setting the real `DTSTART` field.
+    "libical/1.ics",
 ];
 
 /// Files that are real-world-valid but too incomplete to form a valid
@@ -144,7 +185,7 @@ const MALFORMED_FIXTURES: &[&str] = &[
 /// reason; each gets a dedicated assertion in `tests/out_of_scope.rs`
 /// instead.
 ///
-/// Two sub-groups:
+/// Three sub-groups:
 /// - RFC 7953 (`VAVAILABILITY`, `rfc_7953` feature, issue #16) and RFC
 ///   9073/9074 (`VLOCATION`/`VALARM` extensions, `rfc_9074` feature, issue #17)
 ///   excerpts — this crate *does* implement the component/properties they
@@ -154,6 +195,11 @@ const MALFORMED_FIXTURES: &[&str] = &[
 ///   `VFREEBUSY` excerpts (plus one bare `VCARD`, `libical/issue339.ics`, which
 ///   isn't even an iCalendar object) unrelated to any particular RFC feature's
 ///   scope — added per issue #27.
+/// - `rfc_7529.ics` — a fully-formed, otherwise-valid calendar using RFC 7529's
+///   `RSCALE` (non-Gregorian recurrence), which this crate doesn't implement at
+///   all (see the README's "Not yet implemented" section) — unlike the excerpts
+///   above, this fails on content, not structure, but "out of scope" fits just
+///   as well for an unimplemented RFC extension.
 const OUT_OF_SCOPE_FIXTURES: &[&str] = &[
     "collective-icalendar/availabilities/rfc_7953_1.ics",
     "collective-icalendar/availabilities/rfc_7953_2.ics",
@@ -219,6 +265,7 @@ const OUT_OF_SCOPE_FIXTURES: &[&str] = &[
     "libical/overlaps.ics",
     "libical/recur-errors.ics",
     "libical/spanlist.ics",
+    "collective-icalendar/calendars/rfc_7529.ics",
 ];
 
 fn main() {

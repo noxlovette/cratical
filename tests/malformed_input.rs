@@ -898,3 +898,199 @@ fn malformed_image_issue_1561_image_value() {
         Err(CalendarParseError::Parse(_))
     ));
 }
+
+// --- issue #27 bucket 3 follow-up: fixtures unblocked by the TZID fix
+// (`TimeZoneIdentifier` no longer hard-rejects a non-IANA name) but still
+// genuinely invalid for an unrelated reason, now that parsing gets far
+// enough to reach it. ---
+
+/// Missing `PRODID` (REQUIRED at `VCALENDAR` level, §3.4) — same shape as
+/// the bucket-2 fixtures above, just previously masked by a `TZID` this
+/// crate used to hard-reject at parse time.
+#[test]
+fn prodid_missing_america_new_york() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/america_new_york.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing `PRODID` (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_issue_237_non_ascii_tzid() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/\
+         issue_237_fail_to_parse_timezone_with_non_ascii_tzid.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing `PRODID` (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_issue_466_convert_tzid_with_slash() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_466_convert_tzid_with_slash.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing `PRODID` (REQUIRED, §3.4).
+#[test]
+fn prodid_missing_issue_466_respect_unique_timezone() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_466_respect_unique_timezone.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing `PRODID` (REQUIRED, §3.4) — also missing `VERSION`/`UID`/
+/// `DTSTAMP`, a minimal single-property `DTSTART` excerpt.
+#[test]
+fn prodid_missing_issue_722_missing_vtimezone_custom() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_722_missing_VTIMEZONE_custom.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing `PRODID` (REQUIRED, §3.4) — also missing `VERSION`/`DTSTAMP`.
+#[test]
+fn prodid_missing_issue_722_timezone_transition_ambiguity() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/\
+         issue_722_timezone_transition_ambiguity.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing `DTSTAMP` (REQUIRED, §3.6.1) on every `VEVENT`.
+#[test]
+fn dtstamp_missing_issue_313_globally_unique_tzid() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_313_globally_unique_tzid.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Missing `UID` (REQUIRED, §3.8.4.7) on its `VEVENT`.
+#[test]
+fn uid_missing_issue_165_missing_event() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_165_missing_event.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// `DTSTART` occurs twice on the same `VEVENT` (a singleton property,
+/// §3.8.2.4).
+#[test]
+fn duplicate_dtstart_america_new_york_forward_reference() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/america_new_york_forward_reference.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// `DTSTART` occurs twice on the same `VEVENT` (a singleton property,
+/// §3.8.2.4).
+#[test]
+fn duplicate_dtstart_pacific_fiji() {
+    let bytes = fixture_at("collective-icalendar/calendars/pacific_fiji.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// `DTSTART;TZID=America/New_York` paired with
+/// `RDATE;TZID="Central Standard Time"` — two different spellings for what
+/// is likely the same real-world zone, but this crate has no Windows/IANA
+/// alias table to prove that (see issue #6's `TZID` cross-check, extended
+/// from just value-type matching).
+#[test]
+fn rdate_tzid_mismatch_issue_156_khal() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/issue_156_RDATE_with_PERIOD_TZID_khal.\
+         ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// `STATUS:Confirmed` — not the uppercase token RFC 5545 §3.8.1.11 defines
+/// (`CONFIRMED`). This crate matches `STATUS` and every other enumerated
+/// RFC 5545 token case-sensitively, consistently, so this isn't
+/// specifically tolerated.
+#[test]
+fn status_value_not_uppercase_issue_218_bad_tzid() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/issue_218_bad_tzid.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// `SUMMARY=testevent` — `=` instead of `:` introducing the property value.
+#[test]
+fn malformed_property_syntax_timezone_rdate() {
+    let bytes = fixture_at("collective-icalendar/calendars/timezone_rdate.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// `END:VCALENDARD` — a typo'd component-close keyword, so `END` doesn't
+/// match `BEGIN:VCALENDAR`.
+#[test]
+fn end_name_typo_timezone_same_start_and_offset() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/timezone_same_start_and_offset.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// `DTSTAR` (missing the trailing `T`) instead of `DTSTART`, on both the
+/// `VEVENT` and inside `VTIMEZONE`'s `DAYLIGHT` sub-component — an
+/// unrecognized property name, so it falls back to the `Iana`/`Xprop`
+/// catch-all rather than ever setting the real `DTSTART` field.
+#[test]
+fn dtstart_typo_libical_1() {
+    let bytes = fixture_at("libical/1.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
