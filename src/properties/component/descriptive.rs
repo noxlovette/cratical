@@ -778,6 +778,7 @@ pub struct Color {
 }
 
 impl_try_from_bytes!(Color);
+impl_simple_property!(Color, Text);
 
 impl std::fmt::Display for Color {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -840,6 +841,50 @@ impl TryFrom<&[u8]> for Image {
         }
 
         Ok(Self { value, params })
+    }
+}
+
+impl Image {
+    /// Constructs a new `IMAGE` property pointing to a URI, with no
+    /// parameters set beyond `FMTTYPE`/`ALTREP`/`DISPLAY`.
+    pub fn from_uri(
+        uri: Uri,
+        fmttype: Option<Fmttype>,
+        altrep: Option<Altrep>,
+        display: Option<ImageDisplay>,
+    ) -> Self {
+        Self {
+            value: AttachmentValue::Uri(uri),
+            params: ImageParams {
+                shared: SharedParams::default(),
+                encoding: None,
+                value_data_type: None,
+                fmttype,
+                altrep,
+                display,
+            },
+        }
+    }
+
+    /// Constructs a new `IMAGE` property with inline BASE64-encoded
+    /// content, setting `ENCODING=BASE64;VALUE=BINARY` as required by RFC
+    /// 7986 §5.10 for this form.
+    pub fn from_binary(
+        data: Binary,
+        fmttype: Option<Fmttype>,
+        display: Option<ImageDisplay>,
+    ) -> Self {
+        Self {
+            value: AttachmentValue::Binary(data),
+            params: ImageParams {
+                shared: SharedParams::default(),
+                encoding: Some(Encoding::Base64),
+                value_data_type: Some(ValueDataType::Binary),
+                fmttype,
+                altrep: None,
+                display,
+            },
+        }
     }
 }
 
@@ -943,6 +988,58 @@ impl std::fmt::Display for Conference {
     }
 }
 
+/// Builder for [`Conference`].
+#[derive(Debug)]
+pub struct ConferenceBuilder {
+    value: Uri,
+    feature: Option<Feature>,
+    label: Option<Label>,
+    language: Option<Language>,
+}
+
+impl ConferenceBuilder {
+    /// Starts building a `CONFERENCE` property from its URI.
+    pub fn new(value: Uri) -> Self {
+        Self {
+            value,
+            feature: None,
+            label: None,
+            language: None,
+        }
+    }
+
+    /// Sets `FEATURE`.
+    pub fn feature(mut self, feature: Feature) -> Self {
+        self.feature = Some(feature);
+        self
+    }
+
+    /// Sets `LABEL`.
+    pub fn label(mut self, label: Label) -> Self {
+        self.label = Some(label);
+        self
+    }
+
+    /// Sets `LANGUAGE`.
+    pub fn language(mut self, language: Language) -> Self {
+        self.language = Some(language);
+        self
+    }
+
+    /// Finishes the builder, producing the property.
+    pub fn build(self) -> Conference {
+        Conference {
+            value: self.value,
+            params: ConferenceParams {
+                shared: SharedParams::default(),
+                feature: self.feature,
+                label: self.label,
+                language: self.language,
+            },
+        }
+    }
+}
+
 #[derive(Default, Debug)]
 struct ConferenceParams {
     shared: SharedParams,
@@ -1014,6 +1111,7 @@ pub struct RefreshInterval {
 }
 
 impl_try_from_bytes!(RefreshInterval, DurationV);
+impl_simple_property!(RefreshInterval, DurationV);
 
 impl std::fmt::Display for RefreshInterval {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1039,6 +1137,7 @@ pub struct Source {
 }
 
 impl_try_from_bytes!(Source, Uri);
+impl_simple_property!(Source, Uri);
 
 impl std::fmt::Display for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1049,6 +1148,63 @@ impl std::fmt::Display for Source {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn color_source_refresh_interval_new_match_the_parsed_equivalent() {
+        assert_eq!(
+            Color::new("turquoise".into()).to_string(),
+            "COLOR:turquoise"
+        );
+        assert_eq!(
+            Source::new(
+                Uri::parse("https://example.com/holidays.ics").unwrap()
+            )
+            .to_string(),
+            "SOURCE:https://example.com/holidays.ics"
+        );
+        assert_eq!(
+            RefreshInterval::new(DurationV::new(chrono::Duration::hours(1)))
+                .to_string(),
+            "REFRESH-INTERVAL:PT1H"
+        );
+    }
+
+    #[test]
+    fn conference_builder_round_trips() {
+        let conference = ConferenceBuilder::new(
+            Uri::parse("tel:+1-412-555-0123,,,654321").unwrap(),
+        )
+        .feature(Feature::new(vec![crate::params::FeatureValue::Phone]))
+        .build();
+        assert_eq!(
+            conference.to_string(),
+            "CONFERENCE;FEATURE=PHONE:tel:+1-412-555-0123,,,654321"
+        );
+    }
+
+    #[test]
+    fn image_from_uri_and_from_binary_round_trip() {
+        let image = Image::from_uri(
+            Uri::parse("http://example.com/images/party.png").unwrap(),
+            Some(Fmttype::new(crate::values::MediaType::new("image", "png"))),
+            None,
+            None,
+        );
+        assert_eq!(
+            image.to_string(),
+            "IMAGE;FMTTYPE=image/png:http://example.com/images/party.png"
+        );
+
+        let binary = Image::from_binary(
+            Binary::try_from(b"aGVsbG8=".as_slice()).unwrap(),
+            None,
+            None,
+        );
+        assert_eq!(
+            binary.to_string(),
+            "IMAGE;ENCODING=BASE64;VALUE=BINARY:aGVsbG8="
+        );
+    }
 
     #[test]
     fn classification_fixed_tokens() {

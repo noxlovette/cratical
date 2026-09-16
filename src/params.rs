@@ -1313,6 +1313,13 @@ impl std::fmt::Display for RecurrenceIdentifierRange {
 #[derive(Debug)]
 pub struct ImageDisplay(Vec<ImageDisplayValue>);
 
+impl ImageDisplay {
+    /// Constructs a `DISPLAY` parameter from its list of values.
+    pub fn new(values: Vec<ImageDisplayValue>) -> Self {
+        Self(values)
+    }
+}
+
 /// One value of an [`ImageDisplay`] list.
 #[derive(Debug)]
 pub enum ImageDisplayValue {
@@ -1398,6 +1405,13 @@ impl std::fmt::Display for ImageDisplay {
 /// [Section 6.3](https://datatracker.ietf.org/doc/html/rfc7986#section-6.3)
 #[derive(Debug)]
 pub struct Feature(Vec<FeatureValue>);
+
+impl Feature {
+    /// Constructs a `FEATURE` parameter from its list of values.
+    pub fn new(values: Vec<FeatureValue>) -> Self {
+        Self(values)
+    }
+}
 
 /// One value of a [`Feature`] list.
 #[derive(Debug)]
@@ -1496,6 +1510,13 @@ impl std::fmt::Display for Feature {
 /// [Section 6.4](https://datatracker.ietf.org/doc/html/rfc7986#section-6.4)
 #[derive(Debug)]
 pub struct Label(Text);
+
+impl Label {
+    /// Constructs a `LABEL` parameter from its text.
+    pub fn new(value: Text) -> Self {
+        Self(value)
+    }
+}
 
 impl TryFrom<&[u8]> for Label {
     type Error = ParamError;

@@ -58,6 +58,7 @@ pub struct LocationType {
 
 #[cfg(feature = "rfc_9074")]
 impl_try_from_bytes_list!(LocationType, Text, SharedParams);
+#[cfg(feature = "rfc_9074")]
 impl_simple_property!(LocationType, Vec<Text>);
 
 #[cfg(feature = "rfc_9074")]
