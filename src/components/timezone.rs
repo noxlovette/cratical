@@ -1,4 +1,5 @@
 use crate::{
+    ast::ComponentError,
     components::write_lines,
     properties::{
         Comment, DateTimeStart, Iana, LastModified, RRule, RecurrenceDateTimes,
@@ -138,6 +139,97 @@ impl Timezone {
     }
 }
 
+/// Builder for [`Timezone`]. RFC 5545 §3.6.5 requires at least one
+/// `STANDARD` or `DAYLIGHT` sub-component — a "list" rule that doesn't map
+/// cleanly onto the type-state pattern the way a mutually-exclusive pair
+/// of optional fields does (see [`crate::components::event::EventBuilder`]
+/// for that shape), so it's a runtime check in [`Self::build`] instead,
+/// same as the parser's own internal builder.
+#[derive(Debug)]
+pub struct TimezoneBuilder {
+    tzid: TimeZoneIdentifier,
+    last_mod: Option<LastModified>,
+    tz_url: Option<TimeZoneUrl>,
+    standardc: Vec<TzProp>,
+    daylightc: Vec<TzProp>,
+    xprop: Vec<Xprop>,
+    iana: Vec<Iana>,
+}
+
+impl TimezoneBuilder {
+    /// Starts building a `VTIMEZONE` from its one required property,
+    /// `TZID` (RFC 5545 §3.6.5).
+    pub fn new(tzid: TimeZoneIdentifier) -> Self {
+        Self {
+            tzid,
+            last_mod: None,
+            tz_url: None,
+            standardc: Vec::new(),
+            daylightc: Vec::new(),
+            xprop: Vec::new(),
+            iana: Vec::new(),
+        }
+    }
+
+    /// Sets `LAST-MODIFIED`.
+    pub fn last_mod(mut self, v: LastModified) -> Self {
+        self.last_mod = Some(v);
+        self
+    }
+
+    /// Sets `TZURL`.
+    pub fn tz_url(mut self, v: TimeZoneUrl) -> Self {
+        self.tz_url = Some(v);
+        self
+    }
+
+    /// Adds a `STANDARD` sub-component, already built via
+    /// [`TzPropBuilder`].
+    pub fn standard(mut self, v: TzProp) -> Self {
+        self.standardc.push(v);
+        self
+    }
+
+    /// Adds a `DAYLIGHT` sub-component, already built via
+    /// [`TzPropBuilder`].
+    pub fn daylight(mut self, v: TzProp) -> Self {
+        self.daylightc.push(v);
+        self
+    }
+
+    /// Adds a non-standard (`X-`) property.
+    pub fn xprop(mut self, v: Xprop) -> Self {
+        self.xprop.push(v);
+        self
+    }
+
+    /// Adds an IANA-registered property this crate doesn't otherwise model.
+    pub fn iana(mut self, v: Iana) -> Self {
+        self.iana.push(v);
+        self
+    }
+
+    /// Validates the cross-field rule RFC 5545 §3.6.5 places on
+    /// `VTIMEZONE` and assembles the finished [`Timezone`].
+    pub fn build(self) -> Result<Timezone, ComponentError> {
+        if self.standardc.is_empty() && self.daylightc.is_empty() {
+            return Err(ComponentError::RequiresAtLeastOne(
+                "VTIMEZONE",
+                "STANDARD or DAYLIGHT",
+            ));
+        }
+        Ok(Timezone {
+            tzid: self.tzid,
+            last_mod: self.last_mod,
+            tz_url: self.tz_url,
+            standardc: self.standardc,
+            daylightc: self.daylightc,
+            xprop: self.xprop,
+            iana: self.iana,
+        })
+    }
+}
+
 impl std::fmt::Display for Timezone {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "BEGIN:VTIMEZONE\r\n")?;
@@ -243,5 +335,164 @@ impl TzProp {
     /// The IANA-registered properties this crate doesn't otherwise model.
     pub fn iana(&self) -> &[Iana] {
         &self.iana
+    }
+}
+
+/// Builder for [`TzProp`] (the `tzprop` grammar shared by `STANDARD`/
+/// `DAYLIGHT` — see [`TimezoneBuilder::standard`]/[`TimezoneBuilder::daylight`]
+/// for which sub-component name a given `TzProp` ends up under). The
+/// value-type/`TZID` matching between `DTSTART` and its siblings can't be
+/// resolved until the actual property values are known, so it stays a
+/// runtime check in [`Self::build`].
+#[derive(Debug)]
+pub struct TzPropBuilder {
+    dtstart: DateTimeStart,
+    tz_offset_to: TimeZoneOffsetTo,
+    tz_offset_from: TimeZoneOffsetFrom,
+    rrule: Option<RRule>,
+    comment: Vec<Comment>,
+    rdate: Vec<RecurrenceDateTimes>,
+    tzname: Vec<TimeZoneName>,
+    xprop: Vec<Xprop>,
+    iana: Vec<Iana>,
+}
+
+impl TzPropBuilder {
+    /// Starts building a `STANDARD`/`DAYLIGHT` sub-component from its
+    /// three required properties, `DTSTART`, `TZOFFSETTO`, and
+    /// `TZOFFSETFROM` (RFC 5545 §3.6.5).
+    pub fn new(
+        dtstart: DateTimeStart,
+        tz_offset_to: TimeZoneOffsetTo,
+        tz_offset_from: TimeZoneOffsetFrom,
+    ) -> Self {
+        Self {
+            dtstart,
+            tz_offset_to,
+            tz_offset_from,
+            rrule: None,
+            comment: Vec::new(),
+            rdate: Vec::new(),
+            tzname: Vec::new(),
+            xprop: Vec::new(),
+            iana: Vec::new(),
+        }
+    }
+
+    /// Sets `RRULE`.
+    pub fn rrule(mut self, v: RRule) -> Self {
+        self.rrule = Some(v);
+        self
+    }
+
+    /// Adds a `COMMENT` property.
+    pub fn comment(mut self, v: Comment) -> Self {
+        self.comment.push(v);
+        self
+    }
+
+    /// Adds an `RDATE` property.
+    pub fn rdate(mut self, v: RecurrenceDateTimes) -> Self {
+        self.rdate.push(v);
+        self
+    }
+
+    /// Adds a `TZNAME` property.
+    pub fn tzname(mut self, v: TimeZoneName) -> Self {
+        self.tzname.push(v);
+        self
+    }
+
+    /// Adds a non-standard (`X-`) property.
+    pub fn xprop(mut self, v: Xprop) -> Self {
+        self.xprop.push(v);
+        self
+    }
+
+    /// Adds an IANA-registered property this crate doesn't otherwise model.
+    pub fn iana(mut self, v: Iana) -> Self {
+        self.iana.push(v);
+        self
+    }
+
+    /// Validates the `tzprop` grammar's cross-field rules (RFC 5545
+    /// §3.6.5) and assembles the finished [`TzProp`].
+    pub fn build(self) -> Result<TzProp, ComponentError> {
+        self.dtstart.cmp_until(self.rrule.as_ref())?;
+        self.dtstart.cmp_rdate(&self.rdate)?;
+        self.dtstart.cmp_rdate_tzid(&self.rdate)?;
+
+        Ok(TzProp {
+            dtstart: self.dtstart,
+            tz_offset_to: self.tz_offset_to,
+            tz_offset_from: self.tz_offset_from,
+            rrule: self.rrule,
+            comment: self.comment,
+            rdate: self.rdate,
+            tzname: self.tzname,
+            xprop: self.xprop,
+            iana: self.iana,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::values::{DateOrDatetime, DateTime, UtcOffset};
+    use chrono::FixedOffset;
+
+    #[test]
+    fn timezone_builder_round_trips_a_minimal_timezone() {
+        let dtstart = crate::properties::DateTimeStartBuilder::new(
+            DateOrDatetime::DateTime(DateTime::Floating(
+                chrono::NaiveDate::from_ymd_opt(2007, 11, 4)
+                    .unwrap()
+                    .and_hms_opt(2, 0, 0)
+                    .unwrap(),
+            )),
+        )
+        .build();
+        let standard = TzPropBuilder::new(
+            dtstart,
+            TimeZoneOffsetTo::new(UtcOffset::new(
+                FixedOffset::west_opt(5 * 3600).unwrap(),
+            )),
+            TimeZoneOffsetFrom::new(UtcOffset::new(
+                FixedOffset::west_opt(4 * 3600).unwrap(),
+            )),
+        )
+        .build()
+        .unwrap();
+
+        let timezone = TimezoneBuilder::new(TimeZoneIdentifier::new(
+            "America/New_York".into(),
+        ))
+        .standard(standard)
+        .build()
+        .unwrap();
+
+        assert_eq!(
+            timezone.to_string(),
+            "BEGIN:VTIMEZONE\r\nTZID:America/New_York\r\nBEGIN:STANDARD\r\\
+             \
+             nDTSTART:20071104T020000\r\nTZOFFSETTO:-0500\r\nTZOFFSETFROM:\
+             -0400\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\n"
+        );
+    }
+
+    #[test]
+    fn timezone_builder_rejects_no_standard_or_daylight() {
+        let result = TimezoneBuilder::new(TimeZoneIdentifier::new(
+            "America/New_York".into(),
+        ))
+        .build();
+        assert!(matches!(
+            result,
+            Err(ComponentError::RequiresAtLeastOne(
+                "VTIMEZONE",
+                "STANDARD or DAYLIGHT"
+            ))
+        ));
     }
 }
