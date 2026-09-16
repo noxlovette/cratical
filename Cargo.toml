@@ -1,11 +1,15 @@
 [package]
-name = "icalendar"
+name = "cratical"
 version = "0.1.0"
 authors = ["Danila Volkov <danila.volkov@noxlovette.com>"]
-description = "RFC 5545 in Rust"
+description = "A strict, spec-driven iCalendar (RFC 5545) parser and builder, with RFC 5546 (iTIP), 6868, 7953, 7986, and 9074 support"
 license = "Apache-2.0"
 edition = "2024"
-repository = "https://github.com/noxlovette/icalendar"
+rust-version = "1.87"
+repository = "https://github.com/noxlovette/cratical"
+readme = "README.md"
+keywords = ["icalendar", "ical", "rfc5545", "calendar", "ics"]
+categories = ["date-and-time", "parser-implementations"]
 exclude = ["tests/fixtures/**"]
 
 [dependencies]
@@ -21,14 +25,14 @@ thiserror = "2"
 url = "2.5.8"
 
 [features]
-default = ["rfc_7953", "rfc_9074"]
+default = ["rfc-7953", "rfc-9074"]
 # RFC 7953: VAVAILABILITY calendar availability component.
-rfc_7953 = []
+rfc-7953 = []
 # RFC 9073 VLOCATION (nested inside VALARM) and the RFC 9074 VALARM
 # extensions (UID, RELATED-TO, ACKNOWLEDGED, PROXIMITY).
-rfc_9074 = []
+rfc-9074 = []
 # RFC 5546: iTIP, the iCalendar Transport-Independent Interoperability
 # Protocol. Adds a typed scheduling `METHOD` (`itip::Method`) and validates
 # a VCALENDAR against RFC 5546's per-METHOD component/property restriction
 # tables whenever METHOD names one of the 8 recognized iTIP methods.
-rfc_5546 = []
+rfc-5546 = []

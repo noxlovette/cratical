@@ -1,4 +1,4 @@
-#[cfg(feature = "rfc_7953")]
+#[cfg(feature = "rfc-7953")]
 use crate::components::availability::Availability;
 use crate::{
     ast::{
@@ -90,7 +90,7 @@ pub enum Component {
     /// Time zone definition (`VTIMEZONE`).
     Timezone(Timezone),
     /// Availability information (`VAVAILABILITY`, RFC 7953 §3.1).
-    #[cfg(feature = "rfc_7953")]
+    #[cfg(feature = "rfc-7953")]
     Availability(Availability),
     /// An unrecognized `iana-comp`/`x-comp` (RFC 5545 §3.6), preserved
     /// verbatim rather than dropped. See [`UnknownComponent`].
@@ -105,7 +105,7 @@ impl std::fmt::Display for Component {
             Self::Journal(c) => write!(f, "{c}"),
             Self::FreeBusy(c) => write!(f, "{c}"),
             Self::Timezone(c) => write!(f, "{c}"),
-            #[cfg(feature = "rfc_7953")]
+            #[cfg(feature = "rfc-7953")]
             Self::Availability(c) => write!(f, "{c}"),
             Self::Unknown(c) => write!(f, "{c}"),
         }

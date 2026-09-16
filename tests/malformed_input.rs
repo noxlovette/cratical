@@ -24,7 +24,7 @@
 //! variant with `_` rather than the inner error detail — the same
 //! constraint the crate's own public API imposes on any downstream user.
 
-use icalendar::{Calendar, CalendarParseError, Component};
+use cratical::{Calendar, CalendarParseError, Component};
 
 fn fixture(name: &str) -> Vec<u8> {
     let path = format!(

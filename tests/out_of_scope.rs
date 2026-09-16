@@ -4,9 +4,9 @@
 //! (see `OUT_OF_SCOPE_FIXTURES` there):
 //!
 //! - The scope decisions in issues #7 and #17: this crate targets RFC 5545
-//!   core, plus `VAVAILABILITY` (RFC 7953, added under the `rfc_7953` feature —
+//!   core, plus `VAVAILABILITY` (RFC 7953, added under the `rfc-7953` feature —
 //!   see issue #16) and `VLOCATION`/the RFC 9074 `VALARM` extensions (`UID`,
-//!   `RELATED-TO`, `ACKNOWLEDGED`, `PROXIMITY`, added under the `rfc_9074`
+//!   `RELATED-TO`, `ACKNOWLEDGED`, `PROXIMITY`, added under the `rfc-9074`
 //!   feature — see issue #17). See `src/components.rs`'s module doc. Every
 //!   fixture in this group still returns `Err` even though the
 //!   component/properties it exercises are now supported — see each test's own
@@ -27,7 +27,7 @@
 //! that the fixture isn't silently mistaken for coverage of something it
 //! doesn't actually exercise.
 
-use icalendar::{Calendar, CalendarParseError};
+use cratical::{Calendar, CalendarParseError};
 
 fn fixture(rel: &str) -> Vec<u8> {
     let path = format!(
@@ -81,7 +81,7 @@ fn vavailability_example_3_missing_prodid_and_version() {
 /// A bare `VEVENT`/`VALARM` excerpt (RFC 9074 §6's first example) — no
 /// `VCALENDAR` wrapper, so it can't be fed to `Calendar::parse` as-is even
 /// though its `VALARM`'s `UID`/`ACKNOWLEDGED` are supported under the
-/// `rfc_9074` feature. See `tests/rfc_9074.rs` for this same example
+/// `rfc-9074` feature. See `tests/rfc_9074.rs` for this same example
 /// wrapped in a minimal `VCALENDAR`, where it parses successfully.
 #[test]
 fn rfc_9074_example_1_is_not_a_full_calendar_object() {
@@ -125,7 +125,7 @@ fn rfc_9074_example_4_is_not_a_full_calendar_object() {
 /// RFC 9074's `PROXIMITY` `VALARM` extension example (RFC 9074 §8.2) — a
 /// `VALARM` with a nested `VLOCATION` (RFC 9073 §7.2). No `VCALENDAR`
 /// wrapper, so still an `Err`, even though `PROXIMITY`/`VLOCATION` are
-/// supported under the `rfc_9074` feature.
+/// supported under the `rfc-9074` feature.
 #[test]
 fn rfc_9074_proximity_example_is_not_a_full_calendar_object() {
     let bytes = fixture("events/rfc_9074_example_proximity.ics");

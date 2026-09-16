@@ -97,7 +97,7 @@ impl std::fmt::Display for Sequence {
     }
 }
 
-#[cfg(feature = "rfc_5546")]
+#[cfg(feature = "rfc-5546")]
 impl Sequence {
     /// The revision number, e.g. to check RFC 5546's "MUST be greater than
     /// 0" constraint on an `ADD` method.

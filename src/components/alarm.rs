@@ -6,7 +6,7 @@ use crate::{
         Repeat, Summary, Trigger, Xprop,
     },
 };
-#[cfg(feature = "rfc_9074")]
+#[cfg(feature = "rfc-9074")]
 use crate::{
     components::{vlocation::VLocation, write_components},
     properties::{Acknowledged, Proximity, RelatedTo, Uid},
@@ -42,7 +42,7 @@ use crate::{
 /// > END:VALARM
 /// >
 ///
-/// Under the `rfc_9074` feature, this type also carries the [RFC
+/// Under the `rfc-9074` feature, this type also carries the [RFC
 /// 9074](https://datatracker.ietf.org/doc/html/rfc9074) `VALARM` extensions
 /// — `UID`, `RELATED-TO`, `ACKNOWLEDGED`, `PROXIMITY` — and nested
 /// `VLOCATION` sub-components ([RFC
@@ -62,15 +62,15 @@ pub struct Alarm {
     pub(crate) summary: Option<Summary>,
     pub(crate) attendee: Vec<Attendee>,
     pub(crate) attach: Vec<Attachment>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     pub(crate) uid: Option<Uid>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     pub(crate) related: Vec<RelatedTo>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     pub(crate) acknowledged: Option<Acknowledged>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     pub(crate) proximity: Option<Proximity>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     pub(crate) locations: Vec<VLocation>,
     pub(crate) xprop: Vec<Xprop>,
     pub(crate) iana: Vec<Iana>,
@@ -118,31 +118,31 @@ impl Alarm {
     }
 
     /// The `UID` property (RFC 9074 §4), if present.
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     pub fn uid(&self) -> Option<&Uid> {
         self.uid.as_ref()
     }
 
     /// The `RELATED-TO` properties (RFC 9074 §5).
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     pub fn related(&self) -> &[RelatedTo] {
         &self.related
     }
 
     /// The `ACKNOWLEDGED` property (RFC 9074 §6.1), if present.
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     pub fn acknowledged(&self) -> Option<&Acknowledged> {
         self.acknowledged.as_ref()
     }
 
     /// The `PROXIMITY` property (RFC 9074 §8.1), if present.
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     pub fn proximity(&self) -> Option<&Proximity> {
         self.proximity.as_ref()
     }
 
     /// The nested `VLOCATION` sub-components (RFC 9073 §7.2).
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     pub fn locations(&self) -> &[VLocation] {
         &self.locations
     }
@@ -177,7 +177,7 @@ impl std::fmt::Display for Alarm {
         }
         write_lines(f, &self.attendee)?;
         write_lines(f, &self.attach)?;
-        #[cfg(feature = "rfc_9074")]
+        #[cfg(feature = "rfc-9074")]
         {
             if let Some(v) = &self.uid {
                 write!(f, "{v}\r\n")?;
@@ -192,7 +192,7 @@ impl std::fmt::Display for Alarm {
         }
         write_lines(f, &self.xprop)?;
         write_lines(f, &self.iana)?;
-        #[cfg(feature = "rfc_9074")]
+        #[cfg(feature = "rfc-9074")]
         write_components(f, &self.locations)?;
         write!(f, "END:VALARM\r\n")
     }
@@ -204,15 +204,15 @@ impl std::fmt::Display for Alarm {
 struct AlarmCommon {
     duration: Option<Duration>,
     repeat: Option<Repeat>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     uid: Option<Uid>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     related: Vec<RelatedTo>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     acknowledged: Option<Acknowledged>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     proximity: Option<Proximity>,
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     locations: Vec<VLocation>,
     xprop: Vec<Xprop>,
     iana: Vec<Iana>,
@@ -235,7 +235,7 @@ impl AlarmCommon {
         attendee: Vec<Attendee>,
         attach: Vec<Attachment>,
     ) -> Result<Alarm, ComponentError> {
-        #[cfg(feature = "rfc_9074")]
+        #[cfg(feature = "rfc-9074")]
         if !self.locations.is_empty() && self.proximity.is_none() {
             return Err(ComponentError::Requires("VLOCATION", "PROXIMITY"));
         }
@@ -248,15 +248,15 @@ impl AlarmCommon {
             summary,
             attendee,
             attach,
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             uid: self.uid,
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             related: self.related,
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             acknowledged: self.acknowledged,
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             proximity: self.proximity,
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             locations: self.locations,
             xprop: self.xprop,
             iana: self.iana,
@@ -285,28 +285,28 @@ macro_rules! impl_alarm_common_setters {
             }
 
             /// Sets `UID` (RFC 9074 §4).
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             pub fn uid(mut self, v: Uid) -> Self {
                 self.common.uid = Some(v);
                 self
             }
 
             /// Adds a `RELATED-TO` property (RFC 9074 §5).
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             pub fn related(mut self, v: RelatedTo) -> Self {
                 self.common.related.push(v);
                 self
             }
 
             /// Sets `ACKNOWLEDGED` (RFC 9074 §6.1).
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             pub fn acknowledged(mut self, v: Acknowledged) -> Self {
                 self.common.acknowledged = Some(v);
                 self
             }
 
             /// Sets `PROXIMITY` (RFC 9074 §8.1).
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             pub fn proximity(mut self, v: Proximity) -> Self {
                 self.common.proximity = Some(v);
                 self
@@ -317,7 +317,7 @@ macro_rules! impl_alarm_common_setters {
             /// only alongside `PROXIMITY` (RFC 9074 §8) — checked in
             /// `build()`, since it depends on whether `.proximity()` was
             /// also called.
-            #[cfg(feature = "rfc_9074")]
+            #[cfg(feature = "rfc-9074")]
             pub fn location(mut self, v: VLocation) -> Self {
                 self.common.locations.push(v);
                 self
@@ -651,7 +651,7 @@ mod tests {
         assert_eq!(alarm.attendee().len(), 1);
     }
 
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     #[test]
     fn alarm_builder_rejects_a_location_without_proximity() {
         let location = crate::components::vlocation::VLocationBuilder::new(

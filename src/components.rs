@@ -1,11 +1,11 @@
 //! **Scope decision (issue #7):** this crate targets RFC 5545 core, plus
-//! `VAVAILABILITY` (RFC 7953, added under the `rfc_7953` feature — see
+//! `VAVAILABILITY` (RFC 7953, added under the `rfc-7953` feature — see
 //! issue #16) and `VLOCATION` ([RFC
 //! 9073](https://datatracker.ietf.org/doc/html/rfc9073), nested inside
 //! `VALARM`) plus the [RFC
 //! 9074](https://datatracker.ietf.org/doc/html/rfc9074) `VALARM` extensions
 //! (`UID`, `RELATED-TO`, `ACKNOWLEDGED`, `PROXIMITY`), added under the
-//! `rfc_9074` feature — see issue #17. Fixture files for RFC 9074 that are
+//! `rfc-9074` feature — see issue #17. Fixture files for RFC 9074 that are
 //! bare excerpts too incomplete to form a valid `icalobject` on their own
 //! exist under `tests/fixtures/collective-icalendar/` (see
 //! `tests/out_of_scope.rs`); real coverage lives in `tests/rfc_9074.rs`.
@@ -14,7 +14,7 @@
 pub mod alarm;
 /// The `VAVAILABILITY` calendar component (RFC 7953) and its `AVAILABLE`
 /// sub-component, and their builders.
-#[cfg(feature = "rfc_7953")]
+#[cfg(feature = "rfc-7953")]
 pub mod availability;
 /// The `VEVENT` calendar component and its builder.
 pub mod event;
@@ -30,7 +30,7 @@ pub mod todo;
 pub mod unknown;
 /// The `VLOCATION` sub-component (RFC 9073 §7.2), nested only inside
 /// `VALARM`, and its builder.
-#[cfg(feature = "rfc_9074")]
+#[cfg(feature = "rfc-9074")]
 pub mod vlocation;
 
 /// Writes each item in `items`, each followed by CRLF — used by every

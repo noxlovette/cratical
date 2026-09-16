@@ -1,6 +1,6 @@
 //! Coverage for RFC 9073 (`VLOCATION`, nested inside `VALARM`) and the RFC
 //! 9074 `VALARM` extensions (`UID`, `RELATED-TO`, `ACKNOWLEDGED`,
-//! `PROXIMITY`), implemented under the `rfc_9074` feature (default-enabled
+//! `PROXIMITY`), implemented under the `rfc-9074` feature (default-enabled
 //! — see issue #17). These tests are only compiled when that feature is
 //! active.
 //!
@@ -13,9 +13,9 @@
 //! between properties, which aren't valid content lines) in a minimal
 //! `VCALENDAR`, rather than retyping the RFC's example text by hand.
 
-#![cfg(feature = "rfc_9074")]
+#![cfg(feature = "rfc-9074")]
 
-use icalendar::Component;
+use cratical::Component;
 
 fn fixture(rel: &str) -> String {
     let path = format!(
@@ -57,7 +57,7 @@ fn lines(lines: &[&str]) -> String {
 /// `VALARM` carrying the RFC 9074 `UID`.
 #[test]
 fn parses_the_rfc_example_1_fixture_and_reparses_after_display() {
-    let calendar = icalendar::Calendar::parse(&wrap(&body(
+    let calendar = cratical::Calendar::parse(&wrap(&body(
         "events/rfc_9074_example_1.ics",
     )))
     .unwrap();
@@ -75,7 +75,7 @@ fn parses_the_rfc_example_1_fixture_and_reparses_after_display() {
     assert!(alarm.acknowledged().is_none());
 
     let rendered = calendar.to_string();
-    let reparsed = icalendar::Calendar::parse(rendered.as_bytes())
+    let reparsed = cratical::Calendar::parse(rendered.as_bytes())
         .unwrap_or_else(|e| {
             panic!("rendered output failed to reparse: {e}\n---\n{rendered}")
         });
@@ -87,7 +87,7 @@ fn parses_the_rfc_example_1_fixture_and_reparses_after_display() {
 /// relates back to it via `RELATED-TO;RELTYPE=SNOOZE`.
 #[test]
 fn parses_the_rfc_example_2_fixture() {
-    let calendar = icalendar::Calendar::parse(&wrap(&body(
+    let calendar = cratical::Calendar::parse(&wrap(&body(
         "events/rfc_9074_example_2.ics",
     )))
     .unwrap();
@@ -112,7 +112,7 @@ fn parses_the_rfc_example_2_fixture() {
 /// `VALARM`.
 #[test]
 fn parses_the_rfc_example_3_fixture() {
-    let calendar = icalendar::Calendar::parse(&wrap(&body(
+    let calendar = cratical::Calendar::parse(&wrap(&body(
         "events/rfc_9074_example_3.ics",
     )))
     .unwrap();
@@ -128,7 +128,7 @@ fn parses_the_rfc_example_3_fixture() {
 /// original and the snooze `VALARM` now carry `ACKNOWLEDGED`.
 #[test]
 fn parses_the_rfc_example_4_fixture() {
-    let calendar = icalendar::Calendar::parse(&wrap(&body(
+    let calendar = cratical::Calendar::parse(&wrap(&body(
         "events/rfc_9074_example_4.ics",
     )))
     .unwrap();
@@ -155,7 +155,7 @@ fn parses_the_proximity_example_fixture_with_nested_vlocation() {
          19760401T005545Z\r\nDTSTART:19760401T005545Z\r\n",
         1,
     );
-    let calendar = icalendar::Calendar::parse(&wrap(&patched)).unwrap();
+    let calendar = cratical::Calendar::parse(&wrap(&patched)).unwrap();
     let Component::Event(event) = &calendar.components()[0] else {
         panic!("expected a VEVENT component");
     };
@@ -174,7 +174,7 @@ fn parses_the_proximity_example_fixture_with_nested_vlocation() {
     );
 
     let rendered = calendar.to_string();
-    let reparsed = icalendar::Calendar::parse(rendered.as_bytes())
+    let reparsed = cratical::Calendar::parse(rendered.as_bytes())
         .unwrap_or_else(|e| {
             panic!("rendered output failed to reparse: {e}\n---\n{rendered}")
         });
@@ -205,7 +205,7 @@ fn rejects_vlocation_without_proximity() {
         "END:VEVENT",
     ]);
 
-    assert!(icalendar::Calendar::parse(&wrap(&body)).is_err());
+    assert!(cratical::Calendar::parse(&wrap(&body)).is_err());
 }
 
 /// `VLOCATION` requires a `UID` (RFC 9073 §7.2's `locprop`).
@@ -228,7 +228,7 @@ fn rejects_vlocation_missing_uid() {
         "END:VEVENT",
     ]);
 
-    assert!(icalendar::Calendar::parse(&wrap(&body)).is_err());
+    assert!(cratical::Calendar::parse(&wrap(&body)).is_err());
 }
 
 /// `VLOCATION` is only legal nested inside `VALARM` — under a `VEVENT`
@@ -247,7 +247,7 @@ fn rejects_vlocation_nested_directly_under_vevent() {
         "END:VEVENT",
     ]);
 
-    assert!(icalendar::Calendar::parse(&wrap(&body)).is_err());
+    assert!(cratical::Calendar::parse(&wrap(&body)).is_err());
 }
 
 /// `LOCATION-TYPE` accepts a COMMA-separated list of values (RFC 9073
@@ -272,7 +272,7 @@ fn location_type_parses_and_displays_multiple_values() {
         "END:VEVENT",
     ]);
 
-    let calendar = icalendar::Calendar::parse(&wrap(&body)).unwrap();
+    let calendar = cratical::Calendar::parse(&wrap(&body)).unwrap();
     let Component::Event(event) = &calendar.components()[0] else {
         panic!("expected a VEVENT component");
     };

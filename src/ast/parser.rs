@@ -1,7 +1,7 @@
 use super::token::Token;
-#[cfg(feature = "rfc_9074")]
+#[cfg(feature = "rfc-9074")]
 use crate::ast::VLocationBuilder;
-#[cfg(feature = "rfc_7953")]
+#[cfg(feature = "rfc-7953")]
 use crate::ast::{AvailabilityBuilder, AvailableBuilder};
 use crate::{
     Calendar,
@@ -146,7 +146,7 @@ impl Parser {
             b"VJOURNAL" => JournalBuilder::new().into(),
             b"VFREEBUSY" => FreeBusyBuilder::new().into(),
             b"VTIMEZONE" => TimezoneBuilder::new().into(),
-            #[cfg(feature = "rfc_7953")]
+            #[cfg(feature = "rfc-7953")]
             b"VAVAILABILITY" => AvailabilityBuilder::new().into(),
             // An unrecognized `iana-comp`/`x-comp` (RFC 5545 §3.6). Not an
             // error — the RFC requires applications to ignore a component
@@ -177,7 +177,7 @@ impl Parser {
                         let (kind, tz_prop) = self.tz_observance()?;
                         component.ingest_tz_observance(kind, tz_prop)?;
                     }
-                    #[cfg(feature = "rfc_7953")]
+                    #[cfg(feature = "rfc-7953")]
                     b"AVAILABLE" => {
                         let available = self.available()?;
                         component.ingest_available(available)?;
@@ -206,7 +206,7 @@ impl Parser {
     /// §3.6.6). This is deliberately not a recursive call into
     /// [`Self::component`]: `VALARM` is a distinct grammar production with
     /// its own alphabet of legal properties and its own builder type
-    /// ([`AlarmBuilder`], not [`Component`]). Under the `rfc_9074` feature,
+    /// ([`AlarmBuilder`], not [`Component`]). Under the `rfc-9074` feature,
     /// a `VALARM` can itself nest `VLOCATION` sub-components (RFC 9073
     /// §7.2, via RFC 9074 §8's proximity extension) — same dispatch-by-name
     /// shape as [`Self::component`]'s own nested-`BEGIN` handling, just with
@@ -223,7 +223,7 @@ impl Parser {
         while !self.check(End)? {
             if self.check(Begin)? {
                 match self.peek()?.literal() {
-                    #[cfg(feature = "rfc_9074")]
+                    #[cfg(feature = "rfc-9074")]
                     b"VLOCATION" => {
                         let location = self.location()?;
                         alarm.locations.push(location);
@@ -253,7 +253,7 @@ impl Parser {
     /// 9073 §7.2), nested only inside `VALARM` — same shape as
     /// [`Self::alarm`]/[`Self::available`]: its own grammar production, its
     /// own builder type ([`VLocationBuilder`]), no further nesting.
-    #[cfg(feature = "rfc_9074")]
+    #[cfg(feature = "rfc-9074")]
     fn location(&mut self) -> ParseResult<VLocationBuilder> {
         let begin =
             self.consume(Begin, "expected sub-component to start with BEGIN")?;
@@ -284,7 +284,7 @@ impl Parser {
     /// 7953 §3.1), nested only inside `VAVAILABILITY` — same shape as
     /// [`Self::alarm`]: its own grammar production, its own builder type
     /// ([`AvailableBuilder`], not [`Component`]), no further nesting.
-    #[cfg(feature = "rfc_7953")]
+    #[cfg(feature = "rfc-7953")]
     fn available(&mut self) -> ParseResult<AvailableBuilder> {
         let begin =
             self.consume(Begin, "expected sub-component to start with BEGIN")?;

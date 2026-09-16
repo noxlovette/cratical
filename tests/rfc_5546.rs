@@ -1,21 +1,21 @@
-//! Coverage for RFC 5546 (iTIP), implemented under the `rfc_5546` feature
+//! Coverage for RFC 5546 (iTIP), implemented under the `rfc-5546` feature
 //! (not default-enabled — see `Cargo.toml`). These tests are only compiled
 //! when that feature is active.
 //!
 //! Two kinds of coverage:
 //!
-//! - Hand-crafted minimal `VCALENDAR`s exercising [`icalendar::itip`]'s
+//! - Hand-crafted minimal `VCALENDAR`s exercising [`cratical::itip`]'s
 //!   validation directly: one conformant and one violating example per
 //!   method/component-type combination that's easy to get wrong.
 //! - The real-world fixtures in `ITIP_NONCONFORMANT_FIXTURES` (see `build.rs`)
 //!   — valid RFC 5545 objects that stamp a `METHOD` without satisfying that
 //!   method's RFC 5546 restrictions. `build.rs` excludes them from the blanket
-//!   "must parse successfully" fixture tests only when `rfc_5546` is enabled;
+//!   "must parse successfully" fixture tests only when `rfc-5546` is enabled;
 //!   this file pins down the specific reason each one is now rejected.
 
-#![cfg(feature = "rfc_5546")]
+#![cfg(feature = "rfc-5546")]
 
-use icalendar::{Calendar, CalendarParseError};
+use cratical::{Calendar, CalendarParseError};
 
 fn fixture(name: &str) -> Vec<u8> {
     let path = format!(
@@ -56,7 +56,7 @@ fn wrap(method: &str, body: &str) -> Vec<u8> {
 
 #[test]
 fn method_recognized_matches_all_8_itip_tokens() {
-    use icalendar::itip::Method;
+    use cratical::itip::Method;
 
     for (token, expected) in [
         ("PUBLISH", Method::Publish),
@@ -68,7 +68,7 @@ fn method_recognized_matches_all_8_itip_tokens() {
         ("COUNTER", Method::Counter),
         ("DECLINECOUNTER", Method::DeclineCounter),
     ] {
-        let prop = icalendar::properties::Method::new(token.into());
+        let prop = cratical::properties::Method::new(token.into());
         assert_eq!(Method::recognized(&prop), Some(expected), "{token}");
         assert_eq!(expected.to_string(), token);
     }
@@ -76,15 +76,15 @@ fn method_recognized_matches_all_8_itip_tokens() {
 
 #[test]
 fn method_recognized_rejects_a_non_itip_token() {
-    use icalendar::itip::Method;
+    use cratical::itip::Method;
 
-    let prop = icalendar::properties::Method::new("X-CUSTOM-METHOD".into());
+    let prop = cratical::properties::Method::new("X-CUSTOM-METHOD".into());
     assert_eq!(Method::recognized(&prop), None);
 }
 
 #[test]
 fn status_code_2_0_is_success() {
-    use icalendar::itip::StatusCode;
+    use cratical::itip::StatusCode;
 
     assert_eq!(StatusCode::Success.code(), (2, 0));
     assert_eq!(StatusCode::Success.description(), "Success");
@@ -93,7 +93,7 @@ fn status_code_2_0_is_success() {
 
 #[test]
 fn status_code_5_3_is_no_scheduling_support() {
-    use icalendar::itip::StatusCode;
+    use cratical::itip::StatusCode;
 
     assert_eq!(StatusCode::NoSchedulingSupport.code(), (5, 3));
     assert_eq!(StatusCode::NoSchedulingSupport.to_string(), "5.3");

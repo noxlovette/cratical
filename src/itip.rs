@@ -574,7 +574,7 @@ pub(crate) fn validate(
     // RFC 5546 predates RFC 7953's VAVAILABILITY and says nothing about
     // it; skip entirely rather than guess at semantics the RFC doesn't
     // define.
-    #[cfg(feature = "rfc_7953")]
+    #[cfg(feature = "rfc-7953")]
     if components
         .iter()
         .any(|c| matches!(c, CalComponent::Availability(_)))

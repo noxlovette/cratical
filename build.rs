@@ -24,8 +24,8 @@
 //! `icalobject` on their own: the three RFC 7953 `VAVAILABILITY` fixtures
 //! and the five RFC 9074 `VALARM`-extension fixtures (bare excerpts with
 //! no `VCALENDAR` wrapper, or missing `PRODID`/`VERSION`; `VAVAILABILITY`
-//! is implemented under the `rfc_7953` feature (issue #16) and `VLOCATION`/
-//! the RFC 9074 `VALARM` extensions are implemented under the `rfc_9074`
+//! is implemented under the `rfc-7953` feature (issue #16) and `VLOCATION`/
+//! the RFC 9074 `VALARM` extensions are implemented under the `rfc-9074`
 //! feature (issue #17)), plus a much larger set of bare component excerpts
 //! (`VALARM`/`VEVENT`/`VTODO`/`VJOURNAL`/`VFREEBUSY`, and one bare `VCARD`
 //! that isn't even an iCalendar object) with no `VCALENDAR` wrapper at all,
@@ -37,9 +37,9 @@
 //! A last handful (`ITIP_NONCONFORMANT_FIXTURES`) are real-world exports
 //! that stamp a `METHOD` but don't satisfy that method's RFC 5546
 //! restrictions (e.g. `METHOD:PUBLISH` with no `ORGANIZER`) — valid RFC
-//! 5545 objects, so they parse fine without the `rfc_5546` feature, but
+//! 5545 objects, so they parse fine without the `rfc-5546` feature, but
 //! rejected once it's enabled. Excluded from the blanket generation only
-//! when `rfc_5546` is on (`itip_enabled` in `main`, below); each gets a
+//! when `rfc-5546` is on (`itip_enabled` in `main`, below); each gets a
 //! dedicated assertion in `tests/rfc_5546.rs`.
 
 use std::{
@@ -241,8 +241,8 @@ const MALFORMED_FIXTURES: &[&str] = &[
 /// instead.
 ///
 /// Four sub-groups:
-/// - RFC 7953 (`VAVAILABILITY`, `rfc_7953` feature, issue #16) and RFC
-///   9073/9074 (`VLOCATION`/`VALARM` extensions, `rfc_9074` feature, issue #17)
+/// - RFC 7953 (`VAVAILABILITY`, `rfc-7953` feature, issue #16) and RFC
+///   9073/9074 (`VLOCATION`/`VALARM` extensions, `rfc-9074` feature, issue #17)
 ///   excerpts — this crate *does* implement the component/properties they
 ///   exercise; real parsing coverage of the wrapped equivalent lives in
 ///   `tests/rfc_7953.rs`/`tests/rfc_9074.rs`.
@@ -341,8 +341,8 @@ const OUT_OF_SCOPE_FIXTURES: &[&str] = &[
 /// (typically a personal alarm/reminder export tagged `METHOD:PUBLISH`
 /// with no `ORGANIZER`, or a `METHOD:REQUEST` with no `ATTENDEE`) — RFC
 /// 5545 itself doesn't require either property regardless of `METHOD`, so
-/// these parse fine without the `rfc_5546` feature. Only excluded from the
-/// blanket "must parse successfully" generation when `rfc_5546` is
+/// these parse fine without the `rfc-5546` feature. Only excluded from the
+/// blanket "must parse successfully" generation when `rfc-5546` is
 /// enabled (see `main`'s `itip_enabled` check below); each gets a
 /// dedicated assertion in `tests/rfc_5546.rs` instead, confirming it's
 /// rejected for the expected reason.
@@ -365,10 +365,10 @@ fn main() {
     let dest = Path::new(&out_dir).join("fixture_tests.rs");
 
     let mut out = String::new();
-    // `CARGO_FEATURE_<name>` is set by cargo iff this build's `rfc_5546`
+    // `CARGO_FEATURE_<name>` is set by cargo iff this build's `rfc-5546`
     // feature is enabled — used to only apply `ITIP_NONCONFORMANT_FIXTURES`
     // when the stricter iTIP validation those fixtures fail is actually
-    // compiled in, leaving the default (no `rfc_5546`) test run unaffected.
+    // compiled in, leaving the default (no `rfc-5546`) test run unaffected.
     let itip_enabled = env::var("CARGO_FEATURE_RFC_5546").is_ok();
 
     for dir in ["rfc5545", "rrule", "libical", "collective-icalendar"] {
@@ -490,7 +490,7 @@ fn emit_test(
 fn {test_name}() {{
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/{rel_to_manifest}");
     let bytes = std::fs::read(path).expect("fixture should be readable");
-    if let Err(e) = icalendar::Calendar::parse(&bytes) {{
+    if let Err(e) = cratical::Calendar::parse(&bytes) {{
         panic!("failed to parse {rel_to_manifest}: {{e}}");
     }}
 }}
@@ -505,7 +505,7 @@ fn {test_name}() {{
     let bytes = std::fs::read(path).expect("fixture should be readable");
     // Fuzz-corpus input: only required not to panic. A parse error is a
     // perfectly fine outcome for adversarial/malformed bytes.
-    let _ = icalendar::Calendar::parse(&bytes);
+    let _ = cratical::Calendar::parse(&bytes);
 }}
 "#
         ));

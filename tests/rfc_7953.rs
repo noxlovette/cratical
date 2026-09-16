@@ -1,5 +1,5 @@
 //! Coverage for RFC 7953 (`VAVAILABILITY`), implemented under the
-//! `rfc_7953` feature (default-enabled — see issue #16). These tests are
+//! `rfc-7953` feature (default-enabled — see issue #16). These tests are
 //! only compiled when that feature is active.
 //!
 //! The RFC-derived fixtures under
@@ -18,9 +18,9 @@
 //! calendar_display_round_trips_a_minimal_calendar`'s pre-existing,
 //! unrelated breakage for a real example of exactly that happening).
 
-#![cfg(feature = "rfc_7953")]
+#![cfg(feature = "rfc-7953")]
 
-use icalendar::{Calendar, Component};
+use cratical::{Calendar, Component};
 
 fn fixture(rel: &str) -> String {
     let path = format!(
