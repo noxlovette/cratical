@@ -1094,3 +1094,108 @@ fn dtstart_typo_libical_1() {
         Err(CalendarParseError::Parse(_))
     ));
 }
+
+// --- issue #27 bucket 4: the remaining, previously untriaged failures ---
+
+/// `SUMMARY` occurs twice on the same `VEVENT` (a singleton property,
+/// §3.8.7.2) — the second copy is folded across two physical lines but has
+/// (coincidentally) identical text to the first.
+#[test]
+fn duplicate_summary_libical_0() {
+    let bytes = fixture_at("libical/0.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// `RDATE;VALUE=TIME:...` — `TIME` isn't a legal `RDATE` value type per
+/// §3.8.5.2's grammar (`rdtval = date-time / date / period`, no `TIME`
+/// alternative); parsed as a malformed `DATE` instead (the byte shape
+/// `083000` has neither `/` nor `T`), which surfaces as a confusing but
+/// still-correct "input is out of range" (an invalid month/day) rather than
+/// a clearer "unsupported VALUE" message.
+#[test]
+fn rdate_value_time_is_not_a_legal_value_type() {
+    let bytes =
+        fixture_at("collective-icalendar/calendars/multiple_timezones.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// A property name immediately followed by an empty physical line, then a
+/// `SP`-prefixed continuation (`VERSION\r\n\r\n :2.0\r\n`). RFC 5545's
+/// fold-removal rule operates on raw bytes — "any CRLF immediately followed
+/// by a single SP/HTAB is removed" — with no concept of "logical line", so
+/// this crate's (correct) mechanical unfolding collapses the *second* CRLF
+/// (the empty line's own terminator, which happens to be followed by a SP)
+/// into the following `:2.0`, leaving `VERSION` orphaned on its own logical
+/// line and `:2.0` starting a new one with no property name. Confirms this
+/// is a `Lexer` error (an empty NAME token), not evidence of a bug in
+/// `unfold` itself — see `src/ast/lexer/unfold.rs`'s own unit tests for
+/// unfolding's well-behaved cases.
+#[test]
+fn blank_line_before_fold_continuation_orphans_the_property_name() {
+    let bytes = fixture_at(
+        "collective-icalendar/calendars/multiple_calendar_components.ics",
+    );
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Lexer(_))
+    ));
+}
+
+/// Deliberately malformed component-property-at-calendar-level torture
+/// tests from the libical suite (`DURATION`/`SUMMARY`/`DTSTART`/etc.
+/// appearing directly under `VCALENDAR`, never inside any component) — same
+/// "unrecognized/misplaced property" shape as `fuzz_testcase_invalid_month.\
+/// ics` above, just larger.
+#[test]
+fn component_properties_directly_under_vcalendar_libical_1_1() {
+    let bytes = fixture_at("libical/1-1.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Same shape as above, a much larger torture test with duplicated params,
+/// garbage values, and misplaced component properties throughout.
+#[test]
+fn component_properties_directly_under_vcalendar_stresstest() {
+    let bytes = fixture_at("libical/stresstest.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Fuzzer-mutated garbage (control bytes, NUL/high bytes injected
+/// mid-token, garbled component/parameter names, lone `CR`s) — the same
+/// "fuzzer-discovered crash corpus" style `tests/fixtures/libical-fuzz-\
+/// corpus/` already holds, just living under `libical/` proper. Only
+/// required not to panic, like that corpus — an exact error variant isn't
+/// meaningful for adversarial byte noise, so these match broadly rather
+/// than pinning `Lexer`/`Parse`.
+#[test]
+fn fuzzer_mutated_garbage_does_not_panic() {
+    for name in [
+        "crash.ics",
+        "get_char_test.ics",
+        "issue250.ics",
+        "issue251.ics",
+        "issue252.ics",
+        "issue253.ics",
+        "malloc.ics",
+        "caltime.ics",
+        "zday.ics",
+    ] {
+        let bytes = fixture_at(&format!("libical/{name}"));
+        assert!(
+            Calendar::parse(&bytes).is_err(),
+            "{name} should be rejected, not silently accepted"
+        );
+    }
+}

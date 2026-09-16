@@ -176,16 +176,63 @@ const MALFORMED_FIXTURES: &[&str] = &[
     // unrecognized property name, so it falls back to the `Iana`/`Xprop`
     // catch-all rather than ever setting the real `DTSTART` field.
     "libical/1.ics",
+    // --- issue #27 bucket 4: the remaining, previously untriaged failures ---
+    // `SUMMARY` occurs twice on the same `VEVENT` (a singleton property,
+    // §3.8.7.2) — the second copy is folded across two physical lines but
+    // has (coincidentally) identical text to the first.
+    "libical/0.ics",
+    // `RDATE;VALUE=TIME:...` — `TIME` isn't a legal `RDATE` value type per
+    // §3.8.5.2's grammar (`rdtval = date-time / date / period`, no `TIME`
+    // alternative); parsed as a malformed `DATE` instead (the byte shape
+    // `083000` has neither `/` nor `T`), which surfaces as a confusing but
+    // still-correct "input is out of range" (an invalid month/day) rather
+    // than a clearer "unsupported VALUE" message.
+    "collective-icalendar/calendars/multiple_timezones.ics",
+    // A property name immediately followed by an empty physical line, then
+    // a `SP`-prefixed continuation (`VERSION\r\n\r\n :2.0\r\n`). RFC 5545's
+    // fold-removal rule operates on raw bytes — "any CRLF immediately
+    // followed by a single SP/HTAB is removed" — with no concept of
+    // "logical line", so this crate's (correct) mechanical unfolding
+    // collapses the *second* CRLF (the empty line's own terminator, which
+    // happens to be followed by a SP) into the following `:2.0`, leaving
+    // `VERSION` orphaned on its own logical line and `:2.0` starting a new
+    // one with no property name — not a bug in unfolding, but genuinely
+    // malformed input that exploits the byte-level nature of the rule.
+    "collective-icalendar/calendars/multiple_calendar_components.ics",
+    // Deliberately malformed component-property-at-calendar-level torture
+    // tests from the libical suite (`DURATION`/`SUMMARY`/`DTSTART`/etc.
+    // appearing directly under `VCALENDAR`, never inside any component) —
+    // same "unrecognized/misplaced property" shape as the existing
+    // `fuzz_testcase_*` entries above, just larger.
+    "libical/1-1.ics",
+    "libical/stresstest.ics",
+    // Fuzzer-mutated garbage (control bytes, NUL/high bytes injected
+    // mid-token, garbled component/parameter names, lone `CR`s) — the same
+    // "fuzzer-discovered crash corpus" style `libical-fuzz-corpus/` already
+    // holds, just living under `libical/` proper. Only required not to
+    // panic, like that corpus — an exact error variant/message isn't
+    // meaningful for adversarial byte noise.
+    "libical/crash.ics",
+    "libical/get_char_test.ics",
+    "libical/issue250.ics",
+    "libical/issue251.ics",
+    "libical/issue252.ics",
+    "libical/issue253.ics",
+    "libical/malloc.ics",
+    "libical/caltime.ics",
+    "libical/zday.ics",
 ];
 
-/// Files that are real-world-valid but too incomplete to form a valid
-/// `icalobject` on their own — every one is either a bare component excerpt
-/// with no `BEGIN:VCALENDAR` wrapper at all, or missing `PRODID`/`VERSION`.
+/// Files that are real-world-valid but don't form exactly one `icalobject`
+/// on their own — either too little (a bare component excerpt with no
+/// `BEGIN:VCALENDAR` wrapper at all, or missing `PRODID`/`VERSION`) or too
+/// much (several complete, individually-valid `VCALENDAR` objects
+/// concatenated in one file — `Calendar::parse` parses exactly one).
 /// Excluded from the blanket "must parse successfully" generation for that
 /// reason; each gets a dedicated assertion in `tests/out_of_scope.rs`
 /// instead.
 ///
-/// Three sub-groups:
+/// Four sub-groups:
 /// - RFC 7953 (`VAVAILABILITY`, `rfc_7953` feature, issue #16) and RFC
 ///   9073/9074 (`VLOCATION`/`VALARM` extensions, `rfc_9074` feature, issue #17)
 ///   excerpts — this crate *does* implement the component/properties they
@@ -200,6 +247,14 @@ const MALFORMED_FIXTURES: &[&str] = &[
 ///   all (see the README's "Not yet implemented" section) — unlike the excerpts
 ///   above, this fails on content, not structure, but "out of scope" fits just
 ///   as well for an unimplemented RFC extension.
+/// - Four `libical/` fixtures (`calendar.ics`, `classify.ics`, `incoming.ics`,
+///   `2446.ics`) that are streams of several complete `VCALENDAR` objects
+///   concatenated together (RFC 2446's iTIP worked examples, and similarly
+///   shaped ACME calendar-client test data) — each individual `VCALENDAR` is
+///   real-world-valid, but `Calendar::parse` only ever parses the first one
+///   plus whatever trailing content follows it, so these fail (on an unrelated
+///   property, or on structural trailing content) before ever reaching the
+///   "multiple objects" shape that's actually being exercised.
 const OUT_OF_SCOPE_FIXTURES: &[&str] = &[
     "collective-icalendar/availabilities/rfc_7953_1.ics",
     "collective-icalendar/availabilities/rfc_7953_2.ics",
@@ -266,6 +321,10 @@ const OUT_OF_SCOPE_FIXTURES: &[&str] = &[
     "libical/recur-errors.ics",
     "libical/spanlist.ics",
     "collective-icalendar/calendars/rfc_7529.ics",
+    "libical/calendar.ics",
+    "libical/classify.ics",
+    "libical/incoming.ics",
+    "libical/2446.ics",
 ];
 
 fn main() {

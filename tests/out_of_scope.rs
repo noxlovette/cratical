@@ -731,3 +731,60 @@ fn out_of_scope_rfc_7529_rscale_not_implemented() {
         Err(CalendarParseError::Parse(_))
     ));
 }
+
+// --- issue #27 bucket 4: streams of several complete VCALENDAR objects
+// concatenated together, rather than exactly one. `Calendar::parse` only
+// ever parses a single `icalobject`, so these fail on whatever the first
+// object's own content or the stream's trailing content happens to trip on
+// — not proof that the exercised content itself is unsupported. ---
+
+fn fixture_libical(name: &str) -> Vec<u8> {
+    let path = format!(
+        "{}/tests/fixtures/libical/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    std::fs::read(&path)
+        .unwrap_or_else(|e| panic!("fixture {name} should be readable: {e}"))
+}
+
+/// Three ACME calendar-client test `VCALENDAR`s concatenated in one file.
+#[test]
+fn out_of_scope_libical_calendar_multiple_vcalendars() {
+    let bytes = fixture_libical("calendar.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Multiple `VCALENDAR`s concatenated in one file.
+#[test]
+fn out_of_scope_libical_classify_multiple_vcalendars() {
+    let bytes = fixture_libical("classify.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// Fifteen `VCALENDAR`s concatenated in one file.
+#[test]
+fn out_of_scope_libical_incoming_multiple_vcalendars() {
+    let bytes = fixture_libical("incoming.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
+
+/// RFC 2446 (iTIP)'s worked examples: a sequence of separate `VCALENDAR`
+/// messages exchanged between an organizer and attendees, concatenated in
+/// one file.
+#[test]
+fn out_of_scope_libical_2446_multiple_vcalendars() {
+    let bytes = fixture_libical("2446.ics");
+    assert!(matches!(
+        Calendar::parse(&bytes),
+        Err(CalendarParseError::Parse(_))
+    ));
+}
