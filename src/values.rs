@@ -12,7 +12,9 @@ use chrono::{
     Utc,
 };
 use chrono_tz::Tz;
-pub use recurrence::{Frequency, Recur, RecurBuilder, Weekday};
+pub use recurrence::{
+    Frequency, MonthNum, Recur, RecurBuilder, Weekday, WeekdayNum,
+};
 use std::{ops::Deref, str::from_utf8};
 use thiserror::Error;
 use url::Url;
@@ -968,14 +970,37 @@ mod recurrence {
     #[derive(Debug, Clone)]
     struct WeekNum(i8);
 
+    /// A `BYDAY` list item: a [`Weekday`], optionally preceded by a
+    /// positive (+n) or negative (-n) ordinal (RFC 5545 §3.3.10).
     #[derive(Debug, Clone)]
-    struct WeekdayNum {
+    pub struct WeekdayNum {
         ordinal: Option<i8>,
         weekday: Weekday,
     }
-    /// 1 to 12
+
+    impl WeekdayNum {
+        /// The leading `+n`/`-n` ordinal, if present.
+        pub fn ordinal(&self) -> Option<i8> {
+            self.ordinal
+        }
+
+        /// The day of the week.
+        pub fn weekday(&self) -> Weekday {
+            self.weekday
+        }
+    }
+
+    /// A `BYMONTH` list item: a month number, 1 to 12.
     #[derive(Debug, Clone)]
-    struct MonthNum(u8);
+    pub struct MonthNum(u8);
+
+    impl std::ops::Deref for MonthNum {
+        type Target = u8;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
     #[derive(Debug, Clone)]
     struct MonthDayNum(i8);
     #[derive(Debug, Clone)]
@@ -1162,11 +1187,37 @@ mod recurrence {
     }
 
     impl Recur {
-        /// The `UNTIL` rule part, if present — used by component builders to
-        /// cross-check its value type (DATE vs DATE-TIME) against the
-        /// enclosing property's `DTSTART` (RFC 5545 §3.3.10).
-        pub(crate) fn until(&self) -> Option<&DateOrDatetime> {
+        /// The `FREQ` rule part.
+        pub fn freq(&self) -> Frequency {
+            self.freq
+        }
+
+        /// The `UNTIL` rule part, if present. Also used internally by
+        /// component builders to cross-check its value type (DATE vs
+        /// DATE-TIME) against the enclosing property's `DTSTART` (RFC 5545
+        /// §3.3.10).
+        pub fn until(&self) -> Option<&DateOrDatetime> {
             self.until.as_ref()
+        }
+
+        /// The `COUNT` rule part, if present.
+        pub fn count(&self) -> Option<i32> {
+            self.count
+        }
+
+        /// The `INTERVAL` rule part, if present.
+        pub fn interval(&self) -> Option<i32> {
+            self.interval
+        }
+
+        /// The `BYDAY` rule part.
+        pub fn by_day(&self) -> &[WeekdayNum] {
+            &self.by_day
+        }
+
+        /// The `BYMONTH` rule part.
+        pub fn by_month(&self) -> &[MonthNum] {
+            &self.by_month
         }
     }
 

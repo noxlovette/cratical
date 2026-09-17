@@ -80,7 +80,7 @@ impl Method {
     /// `x-name` from another specification, or simply not one of these 8
     /// exact tokens).
     pub fn recognized(method: &MethodProperty) -> Option<Self> {
-        match method.value() {
+        match method.value().as_str() {
             "PUBLISH" => Some(Self::Publish),
             "REQUEST" => Some(Self::Request),
             "REPLY" => Some(Self::Reply),
@@ -715,7 +715,7 @@ fn validate_vevent(method: Method, events: &[&Event]) -> Result<(), ItipError> {
                         property: "SEQUENCE",
                     });
                 }
-                Some(seq) if seq.value() <= 0 => {
+                Some(seq) if **seq.value() <= 0 => {
                     return Err(ItipError::SequenceMustBePositive {
                         method: m,
                         component: C,
@@ -900,7 +900,7 @@ fn validate_vtodo(method: Method, todos: &[&Todo]) -> Result<(), ItipError> {
                         property: "SEQUENCE",
                     });
                 }
-                Some(seq) if seq.value() <= 0 => {
+                Some(seq) if **seq.value() <= 0 => {
                     return Err(ItipError::SequenceMustBePositive {
                         method: m,
                         component: C,
@@ -1075,7 +1075,7 @@ fn validate_vjournal(
                         property: "SEQUENCE",
                     });
                 }
-                Some(seq) if seq.value() <= 0 => {
+                Some(seq) if **seq.value() <= 0 => {
                     return Err(ItipError::SequenceMustBePositive {
                         method: m,
                         component: C,

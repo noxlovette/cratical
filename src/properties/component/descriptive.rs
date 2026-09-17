@@ -388,6 +388,7 @@ pub struct Comment {
 
 impl_try_from_bytes!(Comment, Text, AltrepLanguageParams);
 impl_altrep_language_builder!(CommentBuilder, Comment, Text);
+impl_value_accessor!(Comment, Text);
 
 impl std::fmt::Display for Comment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -414,6 +415,7 @@ pub struct Description {
 
 impl_try_from_bytes!(Description, Text, AltrepLanguageParams);
 impl_altrep_language_builder!(DescriptionBuilder, Description, Text);
+impl_value_accessor!(Description, Text);
 
 impl std::fmt::Display for Description {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -493,6 +495,7 @@ pub struct Location {
 
 impl_try_from_bytes!(Location, Text, AltrepLanguageParams);
 impl_altrep_language_builder!(LocationBuilder, Location, Text);
+impl_value_accessor!(Location, Text);
 
 impl std::fmt::Display for Location {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -626,6 +629,7 @@ pub struct Resources {
 
 impl_try_from_bytes!(Resources, Text, AltrepLanguageParams);
 impl_altrep_language_builder!(ResourcesBuilder, Resources, Text);
+impl_value_accessor!(Resources, Text);
 
 impl std::fmt::Display for Resources {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -663,12 +667,13 @@ impl std::fmt::Display for Status {
     }
 }
 
-#[cfg(feature = "rfc-5546")]
 impl Status {
-    /// The parsed `STATUS` token, to check it against RFC 5546's
-    /// per-METHOD restrictions on which values are allowed (e.g. `CANCEL`
-    /// of a `VEVENT` restricts this to `CANCELLED`).
-    pub(crate) fn kind(&self) -> &StatusValue {
+    /// The parsed `STATUS` token. Used internally (behind the `rfc-5546`
+    /// feature) to check it against RFC 5546's per-METHOD restrictions on
+    /// which values are allowed (e.g. `CANCEL` of a `VEVENT` restricts this
+    /// to `CANCELLED`), but also a plain read accessor for the value —
+    /// equivalent to [`Status::value`].
+    pub fn kind(&self) -> &StatusValue {
         &self.value
     }
 }
@@ -758,6 +763,7 @@ pub struct Summary {
 
 impl_try_from_bytes!(Summary, Text, AltrepLanguageParams);
 impl_altrep_language_builder!(SummaryBuilder, Summary, Text);
+impl_value_accessor!(Summary, Text);
 
 impl std::fmt::Display for Summary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1177,6 +1183,26 @@ mod tests {
                 .to_string(),
             "REFRESH-INTERVAL:PT1H"
         );
+    }
+
+    #[test]
+    fn summary_and_description_value_accessors_read_back_the_parsed_text() {
+        let summary = SummaryBuilder::new("Team meeting".into()).build();
+        assert_eq!(summary.value().as_str(), "Team meeting");
+        // Deref lets the property be used wherever the value type would be,
+        // e.g. as_str() through Text's own Deref<Target = String>.
+        assert_eq!(summary.as_str(), "Team meeting");
+
+        let description =
+            DescriptionBuilder::new("Discuss roadmap".into()).build();
+        assert_eq!(description.value().as_str(), "Discuss roadmap");
+    }
+
+    #[test]
+    fn status_kind_and_value_accessors_are_public_and_agree() {
+        let status = Status::new(StatusValue::Confirmed);
+        assert!(matches!(status.kind(), StatusValue::Confirmed));
+        assert!(matches!(status.value(), StatusValue::Confirmed));
     }
 
     #[test]

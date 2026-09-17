@@ -120,6 +120,71 @@ impl std::fmt::Display for Attendee {
     }
 }
 
+impl Attendee {
+    /// Returns the attendee's calendar user address.
+    pub fn value(&self) -> &CalendarUserAddress {
+        &self.value
+    }
+
+    /// The `LANGUAGE` parameter, if set.
+    pub fn language(&self) -> Option<&Language> {
+        self.params.language.as_ref()
+    }
+
+    /// The `CUTYPE` parameter, if set.
+    pub fn calendar_user_type(&self) -> Option<&CalendarUserType> {
+        self.params.calendar_user_type.as_ref()
+    }
+
+    /// The `MEMBER` parameter, if set.
+    pub fn member(&self) -> Option<&Member> {
+        self.params.member.as_ref()
+    }
+
+    /// The `PARTSTAT` parameter, if set.
+    pub fn status(&self) -> Option<&ParticipationStatus> {
+        self.params.status.as_ref()
+    }
+
+    /// The `RSVP` parameter, if set.
+    pub fn rsvp(&self) -> Option<&Rsvp> {
+        self.params.rsvp.as_ref()
+    }
+
+    /// The `DELEGATED-TO` parameter, if set.
+    pub fn delegatees(&self) -> Option<&Delegatees> {
+        self.params.deletegatee.as_ref()
+    }
+
+    /// The `DELEGATED-FROM` parameter, if set.
+    pub fn delegators(&self) -> Option<&Delegators> {
+        self.params.delegator.as_ref()
+    }
+
+    /// The `SENT-BY` parameter, if set.
+    pub fn sent_by(&self) -> Option<&SentBy> {
+        self.params.sent_by.as_ref()
+    }
+
+    /// The `CN` parameter, if set.
+    pub fn common_name(&self) -> Option<&CommonName> {
+        self.params.common_name.as_ref()
+    }
+
+    /// The `DIR` parameter, if set.
+    pub fn directory(&self) -> Option<&DirectoryEntryReference> {
+        self.params.directory.as_ref()
+    }
+}
+
+impl std::ops::Deref for Attendee {
+    type Target = CalendarUserAddress;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
 /// Parameter bundle for [`Attendee`].
 #[derive(Debug, Default)]
 struct AttendeeParams {
@@ -232,6 +297,7 @@ pub struct Contact {
 
 impl_try_from_bytes!(Contact, Text, AltrepLanguageParams);
 impl_altrep_language_builder!(ContactBuilder, Contact, Text);
+impl_value_accessor!(Contact, Text);
 
 impl std::fmt::Display for Contact {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -307,6 +373,41 @@ impl OrganizerBuilder {
 impl std::fmt::Display for Organizer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ORGANIZER{}:{}", self.params, self.value)
+    }
+}
+
+impl Organizer {
+    /// Returns the organizer's calendar user address.
+    pub fn value(&self) -> &CalendarUserAddress {
+        &self.value
+    }
+
+    /// The `LANGUAGE` parameter, if set.
+    pub fn language(&self) -> Option<&Language> {
+        self.params.language.as_ref()
+    }
+
+    /// The `CN` parameter, if set.
+    pub fn common_name(&self) -> Option<&CommonName> {
+        self.params.common_name.as_ref()
+    }
+
+    /// The `DIR` parameter, if set.
+    pub fn directory(&self) -> Option<&DirectoryEntryReference> {
+        self.params.directory.as_ref()
+    }
+
+    /// The `SENT-BY` parameter, if set.
+    pub fn sent_by(&self) -> Option<&SentBy> {
+        self.params.sent_by.as_ref()
+    }
+}
+
+impl std::ops::Deref for Organizer {
+    type Target = CalendarUserAddress;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
     }
 }
 
@@ -441,10 +542,10 @@ impl RecurrenceIdBuilder {
 }
 
 impl RecurrenceId {
-    /// The parsed `RECURRENCE-ID` value — used by the calendar-wide check
-    /// that flags two components sharing the same `UID` and `RECURRENCE-ID`
-    /// (RFC 5545 §3.8.4.4).
-    pub(crate) fn value(&self) -> &DateOrDatetime {
+    /// The parsed `RECURRENCE-ID` value. Also used internally by the
+    /// calendar-wide check that flags two components sharing the same
+    /// `UID` and `RECURRENCE-ID` (RFC 5545 §3.8.4.4).
+    pub fn value(&self) -> &DateOrDatetime {
         &self.value
     }
 }
@@ -866,6 +967,44 @@ mod tests {
     }
 
     #[test]
+    fn attendee_value_and_param_accessors_read_back_the_parsed_data() {
+        let attendee =
+            AttendeeBuilder::new(cal_address("mailto:jdoe@example.com"))
+                .status(crate::params::ParticipationStatus::Event(
+                    crate::params::PartStatEvent::Accepted,
+                ))
+                .common_name(crate::params::CommonName::new("Jane Doe".into()))
+                .rsvp(crate::params::Rsvp::new(true))
+                .build();
+        assert_eq!(attendee.value().to_string(), "mailto:jdoe@example.com");
+        // Deref lets the CalendarUserAddress be reached directly too.
+        assert_eq!((*attendee).to_string(), "mailto:jdoe@example.com");
+        assert!(matches!(
+            attendee.status(),
+            Some(crate::params::ParticipationStatus::Event(
+                crate::params::PartStatEvent::Accepted
+            ))
+        ));
+        assert_eq!(attendee.common_name().unwrap().to_string(), "Jane Doe");
+        assert!(attendee.rsvp().is_some());
+        assert!(attendee.language().is_none());
+    }
+
+    #[test]
+    fn organizer_value_and_param_accessors_read_back_the_parsed_data() {
+        let organizer =
+            OrganizerBuilder::new(cal_address("mailto:jsmith@example.com"))
+                .common_name(crate::params::CommonName::new(
+                    "John Smith".into(),
+                ))
+                .build();
+        assert_eq!(organizer.value().to_string(), "mailto:jsmith@example.com");
+        assert_eq!((*organizer).to_string(), "mailto:jsmith@example.com");
+        assert_eq!(organizer.common_name().unwrap().to_string(), "John Smith");
+        assert!(organizer.sent_by().is_none());
+    }
+
+    #[test]
     fn recurrence_id_builder_sets_value_date_and_range() {
         let date =
             crate::values::Date::try_from(b"19960401".as_slice()).unwrap();
@@ -877,6 +1016,15 @@ mod tests {
             recurrence_id.to_string(),
             "RECURRENCE-ID;VALUE=DATE;RANGE=THISANDFUTURE:19960401"
         );
+    }
+
+    #[test]
+    fn recurrence_id_value_accessor_reads_back_the_parsed_value() {
+        let date =
+            crate::values::Date::try_from(b"19960401".as_slice()).unwrap();
+        let recurrence_id =
+            RecurrenceIdBuilder::new(DateOrDatetime::Date(date)).build();
+        assert_eq!(recurrence_id.value(), &DateOrDatetime::Date(date));
     }
 
     #[test]

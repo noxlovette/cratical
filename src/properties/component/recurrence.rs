@@ -191,9 +191,10 @@ impl std::fmt::Display for RRule {
 }
 
 impl RRule {
-    /// The parsed `RECUR` value — used by component builders to cross-check
-    /// `UNTIL` against the enclosing property's `DTSTART` (RFC 5545 §3.3.10).
-    pub(crate) fn recur(&self) -> &Recur {
+    /// The parsed `RECUR` value. Also used internally by component builders
+    /// to cross-check `UNTIL` against the enclosing property's `DTSTART`
+    /// (RFC 5545 §3.3.10).
+    pub fn recur(&self) -> &Recur {
         &self.value
     }
 }
@@ -289,6 +290,41 @@ mod tests {
                 .build()
                 .unwrap();
         assert_eq!(RRule::new(recur).to_string(), "RRULE:FREQ=DAILY;COUNT=10");
+    }
+
+    #[test]
+    fn rrule_recur_and_recur_accessors_read_back_the_parsed_rule() {
+        let recur =
+            crate::values::RecurBuilder::new(crate::values::Frequency::Monthly)
+                .count(5)
+                .interval(2)
+                .by_day([(Some(1), crate::values::Weekday::Mo)])
+                .by_month([3])
+                .build()
+                .unwrap();
+        let rrule = RRule::new(recur);
+
+        let recur = rrule.recur();
+        assert!(matches!(recur.freq(), crate::values::Frequency::Monthly));
+        assert_eq!(recur.count(), Some(5));
+        assert_eq!(recur.interval(), Some(2));
+        assert!(recur.until().is_none());
+
+        let by_day = recur.by_day();
+        assert_eq!(by_day.len(), 1);
+        assert_eq!(by_day[0].ordinal(), Some(1));
+        assert!(matches!(by_day[0].weekday(), crate::values::Weekday::Mo));
+
+        let by_month = recur.by_month();
+        assert_eq!(by_month.len(), 1);
+        assert_eq!(*by_month[0], 3);
+
+        // `value()`/`Deref` (from `impl_simple_property!`) reach the same
+        // `Recur`.
+        assert!(matches!(
+            rrule.value().freq(),
+            crate::values::Frequency::Monthly
+        ));
     }
 
     #[test]
