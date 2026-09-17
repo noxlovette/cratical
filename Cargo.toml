@@ -1,6 +1,6 @@
 [package]
 name = "cratical"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Danila Volkov <danila.volkov@noxlovette.com>"]
 description = "A strict, spec-driven iCalendar (RFC 5545) parser and builder, with RFC 5546 (iTIP), 6868, 7953, 7986, and 9074 support"
 license = "Apache-2.0"
