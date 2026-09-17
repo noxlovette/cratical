@@ -13,7 +13,8 @@ use chrono::{
 };
 use chrono_tz::Tz;
 pub use recurrence::{
-    Frequency, MonthNum, Recur, RecurBuilder, Weekday, WeekdayNum,
+    Frequency, Hour, Minutes, MonthDayNum, MonthNum, Recur, RecurBuilder,
+    Seconds, SetPosDay, WeekNum, Weekday, WeekdayNum, YearDayNum,
 };
 use std::{ops::Deref, str::from_utf8};
 use thiserror::Error;
@@ -958,17 +959,53 @@ mod recurrence {
     use super::DateOrDatetime;
     use std::str::from_utf8;
 
-    /// Enforces 0 to 60
+    /// A `BYSECOND` list item: a second within a minute, 0 to 60.
     #[derive(Debug, Clone)]
-    struct Seconds(u8);
-    /// 0 to 59
+    pub struct Seconds(u8);
+
+    impl std::ops::Deref for Seconds {
+        type Target = u8;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    /// A `BYMINUTE` list item: a minute within an hour, 0 to 59.
     #[derive(Debug, Clone)]
-    struct Minutes(u8);
-    /// 0 to 23
+    pub struct Minutes(u8);
+
+    impl std::ops::Deref for Minutes {
+        type Target = u8;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    /// A `BYHOUR` list item: an hour within a day, 0 to 23.
     #[derive(Debug, Clone)]
-    struct Hour(u8);
+    pub struct Hour(u8);
+
+    impl std::ops::Deref for Hour {
+        type Target = u8;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    /// A `BYWEEKNO` list item: a week of the year, 1 to 53 or -53 to -1.
     #[derive(Debug, Clone)]
-    struct WeekNum(i8);
+    pub struct WeekNum(i8);
+
+    impl std::ops::Deref for WeekNum {
+        type Target = i8;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
 
     /// A `BYDAY` list item: a [`Weekday`], optionally preceded by a
     /// positive (+n) or negative (-n) ordinal (RFC 5545 §3.3.10).
@@ -1001,11 +1038,35 @@ mod recurrence {
             &self.0
         }
     }
+
+    /// A `BYMONTHDAY` list item: a day of the month, 1 to 31 or -31 to -1.
     #[derive(Debug, Clone)]
-    struct MonthDayNum(i8);
+    pub struct MonthDayNum(i8);
+
+    impl std::ops::Deref for MonthDayNum {
+        type Target = i8;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    /// A `BYYEARDAY`/`BYSETPOS` list item: a day of the year, 1 to 366 or
+    /// -366 to -1.
     #[derive(Debug, Clone)]
-    struct YearDayNum(i16);
-    type SetPosDay = YearDayNum;
+    pub struct YearDayNum(i16);
+
+    impl std::ops::Deref for YearDayNum {
+        type Target = i16;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    /// A `BYSETPOS` list item; shares its range and representation with
+    /// [`YearDayNum`].
+    pub type SetPosDay = YearDayNum;
 
     /// Day of the week
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1218,6 +1279,46 @@ mod recurrence {
         /// The `BYMONTH` rule part.
         pub fn by_month(&self) -> &[MonthNum] {
             &self.by_month
+        }
+
+        /// The `BYSECOND` rule part.
+        pub fn by_second(&self) -> &[Seconds] {
+            &self.by_second
+        }
+
+        /// The `BYMINUTE` rule part.
+        pub fn by_minute(&self) -> &[Minutes] {
+            &self.by_minute
+        }
+
+        /// The `BYHOUR` rule part.
+        pub fn by_hour(&self) -> &[Hour] {
+            &self.by_hour
+        }
+
+        /// The `BYMONTHDAY` rule part.
+        pub fn by_month_day(&self) -> &[MonthDayNum] {
+            &self.by_month_day
+        }
+
+        /// The `BYYEARDAY` rule part.
+        pub fn by_year_day(&self) -> &[YearDayNum] {
+            &self.by_year_day
+        }
+
+        /// The `BYWEEKNO` rule part.
+        pub fn by_week_no(&self) -> &[WeekNum] {
+            &self.by_week_no
+        }
+
+        /// The `BYSETPOS` rule part.
+        pub fn by_set_pos(&self) -> &[SetPosDay] {
+            &self.by_set_pos
+        }
+
+        /// The `WKST` rule part, if present.
+        pub fn wkst(&self) -> Option<Weekday> {
+            self.wkst
         }
     }
 
@@ -2025,6 +2126,26 @@ mod recurrence {
                 .build()
                 .unwrap_err();
             assert!(matches!(err, ValueError::Malformed { .. }));
+        }
+
+        #[test]
+        fn by_xxx_rule_parts_are_readable_after_a_parse() {
+            let recur = Recur::try_from(
+                "FREQ=MONTHLY;BYSECOND=30;BYMINUTE=15;BYHOUR=9;\
+                 BYMONTHDAY=-1;BYYEARDAY=-306;BYWEEKNO=20;BYSETPOS=-1;\
+                 WKST=SU"
+                    .as_bytes(),
+            )
+            .unwrap();
+
+            assert_eq!(**recur.by_second().first().unwrap(), 30);
+            assert_eq!(**recur.by_minute().first().unwrap(), 15);
+            assert_eq!(**recur.by_hour().first().unwrap(), 9);
+            assert_eq!(**recur.by_month_day().first().unwrap(), -1);
+            assert_eq!(**recur.by_year_day().first().unwrap(), -306);
+            assert_eq!(**recur.by_week_no().first().unwrap(), 20);
+            assert_eq!(**recur.by_set_pos().first().unwrap(), -1);
+            assert_eq!(recur.wkst(), Some(Weekday::Su));
         }
     }
 }
