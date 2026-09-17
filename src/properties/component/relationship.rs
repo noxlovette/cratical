@@ -1,9 +1,9 @@
 use crate::{
     params::{
         CalendarUserType, CommonName, Delegatees, Delegators,
-        DirectoryEntryReference, Language, Member, ParticipationStatus,
-        RecurrenceIdentifierRange, RelationshipType, Rsvp, SentBy,
-        TimeZoneIdentifier, ValueDataType,
+        DirectoryEntryReference, Language, Member, ParticipationRole,
+        ParticipationStatus, RecurrenceIdentifierRange, RelationshipType, Rsvp,
+        SentBy, TimeZoneIdentifier, ValueDataType,
     },
     properties::{
         AltrepLanguageParams, ParameterError, SharedParams, param_name,
@@ -66,6 +66,12 @@ impl AttendeeBuilder {
     /// Sets the `PARTSTAT` parameter.
     pub fn status(mut self, v: ParticipationStatus) -> Self {
         self.params.status = Some(v);
+        self
+    }
+
+    /// Sets the `ROLE` parameter.
+    pub fn role(mut self, v: ParticipationRole) -> Self {
+        self.params.role = Some(v);
         self
     }
 
@@ -146,6 +152,11 @@ impl Attendee {
         self.params.status.as_ref()
     }
 
+    /// The `ROLE` parameter, if set.
+    pub fn role(&self) -> Option<&ParticipationRole> {
+        self.params.role.as_ref()
+    }
+
     /// The `RSVP` parameter, if set.
     pub fn rsvp(&self) -> Option<&Rsvp> {
         self.params.rsvp.as_ref()
@@ -193,6 +204,7 @@ struct AttendeeParams {
     calendar_user_type: Option<CalendarUserType>,
     member: Option<Member>,
     status: Option<ParticipationStatus>,
+    role: Option<ParticipationRole>,
     rsvp: Option<Rsvp>,
     deletegatee: Option<Delegatees>,
     delegator: Option<Delegators>,
@@ -222,6 +234,7 @@ impl TryFrom<&[u8]> for AttendeeParams {
                 b"PARTSTAT" => {
                     params.status = Some(value()?.as_slice().try_into()?)
                 }
+                b"ROLE" => params.role = Some(value()?.as_slice().try_into()?),
                 b"RSVP" => params.rsvp = Some(value()?.as_slice().try_into()?),
                 b"DELEGATED-TO" => {
                     params.deletegatee = Some(value()?.as_slice().try_into()?)
@@ -258,6 +271,9 @@ impl std::fmt::Display for AttendeeParams {
         }
         if let Some(v) = &self.status {
             write!(f, ";PARTSTAT={v}")?;
+        }
+        if let Some(v) = &self.role {
+            write!(f, ";ROLE={v}")?;
         }
         if let Some(v) = &self.rsvp {
             write!(f, ";RSVP={v}")?;
@@ -916,8 +932,33 @@ mod tests {
         .unwrap();
         assert_eq!(
             attendee.to_string(),
-            "ATTENDEE;PARTSTAT=ACCEPTED;CN=Jane \
-             Doe;ROLE=REQ-PARTICIPANT:mailto:jdoe@example.com"
+            "ATTENDEE;PARTSTAT=ACCEPTED;ROLE=REQ-PARTICIPANT;CN=Jane \
+             Doe:mailto:jdoe@example.com"
+        );
+    }
+
+    #[test]
+    fn attendee_role_is_parsed_as_a_structured_value() {
+        let attendee = Attendee::try_from(
+            b";ROLE=CHAIR:mailto:mrbig@example.com".as_slice(),
+        )
+        .unwrap();
+        assert!(matches!(attendee.role(), Some(ParticipationRole::Chair)));
+    }
+
+    #[test]
+    fn attendee_builder_sets_role() {
+        let attendee = AttendeeBuilder::new(
+            CalendarUserAddress::try_from(
+                b"mailto:jdoe@example.com".as_slice(),
+            )
+            .unwrap(),
+        )
+        .role(ParticipationRole::OptParticipant)
+        .build();
+        assert_eq!(
+            attendee.to_string(),
+            "ATTENDEE;ROLE=OPT-PARTICIPANT:mailto:jdoe@example.com"
         );
     }
 
@@ -975,6 +1016,7 @@ mod tests {
                 ))
                 .common_name(crate::params::CommonName::new("Jane Doe".into()))
                 .rsvp(crate::params::Rsvp::new(true))
+                .role(ParticipationRole::Chair)
                 .build();
         assert_eq!(attendee.value().to_string(), "mailto:jdoe@example.com");
         // Deref lets the CalendarUserAddress be reached directly too.
@@ -988,6 +1030,7 @@ mod tests {
         assert_eq!(attendee.common_name().unwrap().to_string(), "Jane Doe");
         assert!(attendee.rsvp().is_some());
         assert!(attendee.language().is_none());
+        assert!(matches!(attendee.role(), Some(ParticipationRole::Chair)));
     }
 
     #[test]
