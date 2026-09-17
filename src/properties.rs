@@ -77,7 +77,9 @@ macro_rules! impl_try_from_bytes_list {
 
 /// Adds a `new` constructor for a client-facing property whose params are
 /// exactly [`SharedParams`] — i.e. it has no RFC-defined parameters of its
-/// own to set, only the value.
+/// own to set, only the value. Also adds a `value()` read accessor and a
+/// `Deref` to the underlying value type, so a parsed property can be read
+/// back out, not just built/round-tripped (see issue #33).
 macro_rules! impl_simple_property {
     ($ty:ident, $value_ty:ty) => {
         impl $ty {
@@ -88,6 +90,43 @@ macro_rules! impl_simple_property {
                     value,
                     params: crate::properties::SharedParams::default(),
                 }
+            }
+
+            /// Returns the property's parsed value.
+            pub fn value(&self) -> &$value_ty {
+                &self.value
+            }
+        }
+
+        impl std::ops::Deref for $ty {
+            type Target = $value_ty;
+
+            fn deref(&self) -> &Self::Target {
+                &self.value
+            }
+        }
+    };
+}
+
+/// Adds a `value()` read accessor and a `Deref` to the underlying value
+/// type, for a property whose builder doesn't come from
+/// [`impl_simple_property!`] (e.g. it has its own params to set, like
+/// [`impl_altrep_language_builder!`]'s `ALTREP`/`LANGUAGE`) but should still
+/// let a parsed value be read back out (see issue #33).
+macro_rules! impl_value_accessor {
+    ($ty:ident, $value_ty:ty) => {
+        impl $ty {
+            /// Returns the property's parsed value.
+            pub fn value(&self) -> &$value_ty {
+                &self.value
+            }
+        }
+
+        impl std::ops::Deref for $ty {
+            type Target = $value_ty;
+
+            fn deref(&self) -> &Self::Target {
+                &self.value
             }
         }
     };

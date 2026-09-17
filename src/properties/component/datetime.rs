@@ -104,10 +104,10 @@ impl TryFrom<&[u8]> for DateTimeEnd {
 }
 
 impl DateTimeEnd {
-    /// The parsed `DTEND` value — used by `build()` to cross-check its
-    /// value type (DATE vs DATE-TIME) against the component's `DTSTART`
-    /// (RFC 5545 §3.8.2.2).
-    pub(crate) fn value(&self) -> &DateOrDatetime {
+    /// The parsed `DTEND` value. Also used internally by `build()` to
+    /// cross-check its value type (DATE vs DATE-TIME) against the
+    /// component's `DTSTART` (RFC 5545 §3.8.2.2).
+    pub fn value(&self) -> &DateOrDatetime {
         &self.value
     }
 }
@@ -145,10 +145,10 @@ impl TryFrom<&[u8]> for DateTimeDue {
 }
 
 impl DateTimeDue {
-    /// The parsed `DUE` value — used by `build()` to cross-check its value
-    /// type (DATE vs DATE-TIME) against the component's `DTSTART` (RFC 5545
-    /// §3.8.2.3).
-    pub(crate) fn value(&self) -> &DateOrDatetime {
+    /// The parsed `DUE` value. Also used internally by `build()` to
+    /// cross-check its value type (DATE vs DATE-TIME) against the
+    /// component's `DTSTART` (RFC 5545 §3.8.2.3).
+    pub fn value(&self) -> &DateOrDatetime {
         &self.value
     }
 }
@@ -185,10 +185,10 @@ impl TryFrom<&[u8]> for DateTimeStart {
 }
 
 impl DateTimeStart {
-    /// The parsed `DTSTART` value — used by component builders to
-    /// cross-check its value type (DATE vs DATE-TIME) against a sibling
-    /// `RRULE`'s `UNTIL` (RFC 5545 §3.3.10).
-    pub(crate) fn value(&self) -> &DateOrDatetime {
+    /// The parsed `DTSTART` value. Also used internally by component
+    /// builders to cross-check its value type (DATE vs DATE-TIME) against a
+    /// sibling `RRULE`'s `UNTIL` (RFC 5545 §3.3.10).
+    pub fn value(&self) -> &DateOrDatetime {
         &self.value
     }
 
@@ -586,6 +586,14 @@ mod tests {
     }
 
     #[test]
+    fn dtstart_value_accessor_reads_back_the_parsed_value() {
+        let dtstart =
+            DateTimeStart::try_from(b":19980118T073000Z".as_slice()).unwrap();
+        let dt = DateTime::try_from(b"19980118T073000Z".as_slice()).unwrap();
+        assert_eq!(dtstart.value(), &DateOrDatetime::DateTime(dt));
+    }
+
+    #[test]
     fn duration_property_display_round_trips() {
         let duration = Duration::try_from(b":PT1H0M0S".as_slice()).unwrap();
         assert_eq!(duration.to_string(), "DURATION:PT1H");
@@ -619,6 +627,14 @@ mod tests {
             crate::values::Date::try_from(b"19980704".as_slice()).unwrap();
         let dtend = DateTimeEndBuilder::new(DateOrDatetime::Date(date)).build();
         assert_eq!(dtend.to_string(), "DTEND;VALUE=DATE:19980704");
+    }
+
+    #[test]
+    fn dtend_value_accessor_reads_back_the_parsed_value() {
+        let date =
+            crate::values::Date::try_from(b"19980704".as_slice()).unwrap();
+        let dtend = DateTimeEndBuilder::new(DateOrDatetime::Date(date)).build();
+        assert_eq!(dtend.value(), &DateOrDatetime::Date(date));
     }
 
     #[test]

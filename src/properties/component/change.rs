@@ -97,15 +97,6 @@ impl std::fmt::Display for Sequence {
     }
 }
 
-#[cfg(feature = "rfc-5546")]
-impl Sequence {
-    /// The revision number, e.g. to check RFC 5546's "MUST be greater than
-    /// 0" constraint on an `ADD` method.
-    pub(crate) fn value(&self) -> i32 {
-        *self.value
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

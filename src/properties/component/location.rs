@@ -29,6 +29,7 @@ pub struct Name {
 
 impl_try_from_bytes!(Name, Text, AltrepLanguageParams);
 impl_altrep_language_builder!(NameBuilder, Name, Text);
+impl_value_accessor!(Name, Text);
 
 impl std::fmt::Display for Name {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
