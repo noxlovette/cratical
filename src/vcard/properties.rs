@@ -17,7 +17,7 @@
 
 use super::{
     ParseError,
-    params::{Parameters, TypeValue},
+    params::{Parameters, TypeValue, ValueDataType},
     value_start, values,
 };
 use std::fmt;
@@ -91,6 +91,20 @@ pub struct Version {
 }
 
 impl Version {
+    /// A `VERSION` property with no group and no parameters.
+    pub fn new(value: values::Version) -> Self {
+        Self {
+            group: None,
+            value,
+            params: Parameters::default(),
+        }
+    }
+
+    /// The property's name.
+    pub fn name(&self) -> &'static str {
+        "VERSION"
+    }
+
     /// The group the property was written with, if any.
     pub fn group(&self) -> Option<&Group> {
         self.group.as_ref()
@@ -214,6 +228,87 @@ passthrough_property! {
     ///
     /// [Section 6.10](https://datatracker.ietf.org/doc/html/rfc6350#section-6.10)
     Iana
+}
+
+/// The wire form of an extension property built from code, checked as the
+/// content-line grammar needs: a name of `ALPHA / DIGIT / "-"` and a value
+/// on one line (a line break in it would start another content line).
+fn extension_line(name: &str, value: &str) -> Result<String, ParseError> {
+    if name.is_empty()
+        || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    {
+        return Err(ParseError::Malformed {
+            expected: "a name of letters, digits and '-'".into(),
+            received: Some(name.to_owned()),
+        });
+    }
+    if value.contains(['\r', '\n']) {
+        return Err(ParseError::Malformed {
+            expected: "a value without a line break".into(),
+            received: Some(value.to_owned()),
+        });
+    }
+    Ok(format!(":{value}"))
+}
+
+impl Xprop {
+    /// An `X-` property from code, e.g. `Xprop::new("X-ABLabel", "Home")`.
+    /// The name must start with "X-" (case-insensitively); the value is
+    /// written as given.
+    pub fn new(name: &str, value: &str) -> Result<Self, ParseError> {
+        let name = name.to_ascii_uppercase();
+        if !name.starts_with("X-") {
+            return Err(ParseError::Malformed {
+                expected: "a name starting with \"X-\"".into(),
+                received: Some(name),
+            });
+        }
+        let wire = extension_line(&name, value)?;
+        Self::parse(None, name.as_bytes(), wire.as_bytes())
+    }
+
+    /// The property in `group`.
+    pub fn in_group(mut self, group: Group) -> Self {
+        self.group = Some(group);
+        self
+    }
+
+    /// The property with `params`.
+    pub fn with_params(mut self, params: Parameters) -> Self {
+        self.params = params;
+        self
+    }
+}
+
+impl Iana {
+    /// A property with no type of its own, from code. The name must not be
+    /// one this crate has a type for, nor start with "X-"; use the typed
+    /// property or [`Xprop`] for those.
+    pub fn new(name: &str, value: &str) -> Result<Self, ParseError> {
+        let name = name.to_ascii_uppercase();
+        if name.starts_with("X-")
+            || PROPERTY_DISPATCH.contains_key(name.as_bytes())
+        {
+            return Err(ParseError::Malformed {
+                expected: "a name this crate has no property type for".into(),
+                received: Some(name),
+            });
+        }
+        let wire = extension_line(&name, value)?;
+        Self::parse(None, name.as_bytes(), wire.as_bytes())
+    }
+
+    /// The property in `group`.
+    pub fn in_group(mut self, group: Group) -> Self {
+        self.group = Some(group);
+        self
+    }
+
+    /// The property with `params`.
+    pub fn with_params(mut self, params: Parameters) -> Self {
+        self.params = params;
+        self
+    }
 }
 
 /// Which value type the property's value is written as: the one its `VALUE`
@@ -361,6 +456,7 @@ macro_rules! property {
     (
         $(#[$doc:meta])*
         $ty:ident, $name:literal, $value:ty, |$params:ident, $raw:ident| $parse:expr
+        $(, needs_value = |$v:ident| $needs:expr)?
     ) => {
         $(#[$doc])*
         #[derive(Debug, Clone, PartialEq, Eq)]
@@ -371,6 +467,67 @@ macro_rules! property {
         }
 
         impl $ty {
+            /// A property with this value, no group and no parameters
+            /// beyond the `VALUE` the value's type needs to be read back
+            /// as itself.
+            pub fn new(value: $value) -> Self {
+                #[allow(unused_mut)]
+                let mut params = Parameters::default();
+                $(
+                    let needs: Option<ValueDataType> = {
+                        let $v = &value;
+                        $needs
+                    };
+                    if let Some(ty) = needs {
+                        params = params.with_value_if_absent(ty);
+                    }
+                )?
+                Self { group: None, value, params }
+            }
+
+            /// The property, in `group`.
+            pub fn in_group(mut self, group: Group) -> Self {
+                self.group = Some(group);
+                self
+            }
+
+            /// The property with `params`, checked as if it had been
+            /// written: a parameter the property can't have, or one that
+            /// would have the value read back as something else, is an
+            /// error. The `VALUE` the value's type needs is added when
+            /// `params` has none.
+            pub fn with_params(
+                self,
+                params: Parameters,
+            ) -> Result<Self, ParseError> {
+                #[allow(unused_mut)]
+                let mut params = params;
+                $(
+                    let needs: Option<ValueDataType> = {
+                        let $v = &self.value;
+                        $needs
+                    };
+                    if let Some(ty) = needs {
+                        params = params.with_value_if_absent(ty);
+                    }
+                )?
+                let wire = format!("{params}:{}", self.value);
+                let read = Self::parse(self.group.clone(), wire.as_bytes())?;
+                if read.value != self.value {
+                    return Err(ParseError::Malformed {
+                        expected: "parameters that keep the value as it is"
+                            .into(),
+                        received: Some(wire),
+                    });
+                }
+                Ok(read)
+            }
+
+            /// The property's name.
+            pub fn name(&self) -> &'static str {
+                $name
+            }
+
             /// The group the property was written with, if any.
             pub fn group(&self) -> Option<&Group> {
                 self.group.as_ref()
@@ -589,7 +746,9 @@ property! {
     /// [Section 6.2.5](https://datatracker.ietf.org/doc/html/rfc6350#section-6.2.5)
     Birthday, "BDAY", values::DateAndOrTimeOrText, |params, raw| {
         date_or_text("BDAY", params, raw)
-    }
+    },
+    needs_value = |v| matches!(v, values::DateAndOrTimeOrText::Text(_))
+        .then_some(ValueDataType::Text)
 }
 
 property! {
@@ -608,7 +767,9 @@ property! {
     /// [Section 6.2.6](https://datatracker.ietf.org/doc/html/rfc6350#section-6.2.6)
     Anniversary, "ANNIVERSARY", values::DateAndOrTimeOrText, |params, raw| {
         date_or_text("ANNIVERSARY", params, raw)
-    }
+    },
+    needs_value = |v| matches!(v, values::DateAndOrTimeOrText::Text(_))
+        .then_some(ValueDataType::Text)
 }
 
 property! {
@@ -699,7 +860,9 @@ property! {
     /// [Section 6.4.1](https://datatracker.ietf.org/doc/html/rfc6350#section-6.4.1)
     Telephone, "TEL", values::TextOrUri, |params, raw| {
         text_or_uri("TEL", params, raw, "text")
-    }
+    },
+    needs_value = |v| matches!(v, values::TextOrUri::Uri(_))
+        .then_some(ValueDataType::Uri)
 }
 
 property! {
@@ -788,7 +951,12 @@ property! {
     /// > TZ;VALUE=utc-offset:-0500
     ///
     /// [Section 6.5.1](https://datatracker.ietf.org/doc/html/rfc6350#section-6.5.1)
-    Tz, "TZ", values::Timezone, |params, raw| tz(params, raw)
+    Tz, "TZ", values::Timezone, |params, raw| tz(params, raw),
+    needs_value = |v| match v {
+        values::Timezone::Text(_) => None,
+        values::Timezone::Uri(_) => Some(ValueDataType::Uri),
+        values::Timezone::UtcOffset(_) => Some(ValueDataType::UtcOffset),
+    }
 }
 
 property! {
@@ -930,7 +1098,9 @@ property! {
     /// [Section 6.6.6](https://datatracker.ietf.org/doc/html/rfc6350#section-6.6.6)
     Related, "RELATED", values::TextOrUri, |params, raw| {
         text_or_uri("RELATED", params, raw, "uri")
-    }
+    },
+    needs_value = |v| matches!(v, values::TextOrUri::Text(_))
+        .then_some(ValueDataType::Text)
 }
 
 property! {
@@ -1036,7 +1206,19 @@ property! {
     /// > UID:urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6
     ///
     /// [Section 6.7.6](https://datatracker.ietf.org/doc/html/rfc6350#section-6.7.6)
-    Uid, "UID", values::Uid, |params, raw| uid(params, raw)
+    Uid, "UID", values::Uid, |params, raw| uid(params, raw),
+    // Text that would be read back as a URI needs `VALUE=text` to stay text.
+    needs_value = |v| match v {
+        values::Uid::Text(_)
+            if matches!(
+                values::Uid::try_from(v.to_string().as_bytes()),
+                Ok(values::Uid::Uri(_))
+            ) =>
+        {
+            Some(ValueDataType::Text)
+        }
+        _ => None,
+    }
 }
 
 property! {
@@ -1100,7 +1282,9 @@ property! {
     /// [Section 6.8.1](https://datatracker.ietf.org/doc/html/rfc6350#section-6.8.1)
     Key, "KEY", values::TextOrUri, |params, raw| {
         text_or_uri("KEY", params, raw, "uri")
-    }
+    },
+    needs_value = |v| matches!(v, values::TextOrUri::Text(_))
+        .then_some(ValueDataType::Text)
 }
 
 property! {
@@ -1193,7 +1377,22 @@ macro_rules! properties {
                     $(Self::$ty(p) => p.params(),)*
                 }
             }
+
+            /// The property's name, upper-cased.
+            pub fn name(&self) -> &str {
+                match self {
+                    $(Self::$ty(p) => p.name(),)*
+                }
+            }
         }
+
+        $(
+            impl From<$ty> for Property {
+                fn from(p: $ty) -> Self {
+                    Self::$ty(p)
+                }
+            }
+        )*
 
         impl fmt::Display for Property {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

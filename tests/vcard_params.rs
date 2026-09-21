@@ -678,14 +678,17 @@ fn every_parameter_survives_being_written_and_read_again() {
 // ---- through a whole vCard ----
 
 fn card_with(line: &str) -> VCard {
-    let wire = format!("BEGIN:VCARD\r\nVERSION:4.0\r\n{line}\r\nEND:VCARD\r\n");
+    let wire = format!(
+        "BEGIN:VCARD\r\nVERSION:4.0\r\n{line}\r\nFN:Test\r\nEND:VCARD\r\n"
+    );
     VCard::parse(wire.as_bytes()).unwrap_or_else(|e| panic!("{line}: {e}"))
 }
 
 #[test]
 fn a_property_carries_its_typed_parameters() {
-    let card =
-        card_with("TEL;TYPE=\"work,voice\";PREF=1;PID=1.1:tel:+1-555-555-5555");
+    let card = card_with(
+        "TEL;TYPE=\"work,voice\";PREF=1;PID=1.1:tel:+1-555-555-5555\r\nCLIENTPIDMAP:1;urn:uuid:3df403f4-5924-4bb7-b077-3c711d9eb34b",
+    );
     let Property::Telephone(tel) = &card.properties()[0] else {
         panic!("expected TEL");
     };
@@ -717,8 +720,9 @@ fn a_bad_parameter_fails_the_card() {
         "TEL;WORK:+1",
         "TEL;PREF=1;PREF=2:+1",
     ] {
-        let wire =
-            format!("BEGIN:VCARD\r\nVERSION:4.0\r\n{line}\r\nEND:VCARD\r\n");
+        let wire = format!(
+            "BEGIN:VCARD\r\nVERSION:4.0\r\n{line}\r\nFN:Test\r\nEND:VCARD\r\n"
+        );
         assert!(
             matches!(VCard::parse(wire.as_bytes()), Err(ParseError::Param(_))),
             "{line}"

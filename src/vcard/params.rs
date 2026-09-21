@@ -887,6 +887,12 @@ pub struct Parameters {
 }
 
 impl Parameters {
+    /// These parameters with `VALUE` set to `ty`, unless they have one.
+    pub(crate) fn with_value_if_absent(mut self, ty: ValueDataType) -> Self {
+        self.value.get_or_insert(ty);
+        self
+    }
+
     /// Whether the property has no parameters.
     pub fn is_empty(&self) -> bool {
         *self == Self::default()

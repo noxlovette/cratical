@@ -190,7 +190,7 @@ fn version_3_0_is_unsupported_without_rfc_2426() {
 
 #[test]
 fn a_group_is_kept_on_the_property_and_round_trips() {
-    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nitem1.TEL;TYPE=cell:+1 555\r\nitem1.X-ABLabel:Mobile\r\nEND:VCARD\r\n";
+    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nitem1.TEL;TYPE=cell:+1 555\r\nitem1.X-ABLabel:Mobile\r\nFN:Test\r\nEND:VCARD\r\n";
     let card = VCard::parse(src).unwrap();
     let props: Vec<_> = card.properties().iter().map(group_and_line).collect();
     assert_eq!(
@@ -198,6 +198,7 @@ fn a_group_is_kept_on_the_property_and_round_trips() {
         [
             (Some("item1"), "item1.TEL;TYPE=cell:+1 555".to_owned()),
             (Some("item1"), "item1.X-ABLABEL:Mobile".to_owned()),
+            (None, "FN:Test".to_owned()),
         ]
     );
 }
@@ -233,14 +234,15 @@ fn begin_and_end_cannot_carry_a_group() {
 #[test]
 fn an_empty_value_is_kept() {
     // `1*contentline` with `value = *VALUE-CHAR`: empty is fine.
-    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nNOTE:\r\nEND:VCARD\r\n";
+    let src =
+        b"BEGIN:VCARD\r\nVERSION:4.0\r\nNOTE:\r\nFN:Test\r\nEND:VCARD\r\n";
     let card = VCard::parse(src).unwrap();
     assert_eq!(card.properties()[0].to_string(), "NOTE:");
 }
 
 #[test]
 fn a_colon_inside_a_quoted_param_does_not_start_the_value() {
-    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nADR;LABEL=\"a:b;c,d\":;;x\r\nEND:VCARD\r\n";
+    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nADR;LABEL=\"a:b;c,d\":;;x\r\nFN:Test\r\nEND:VCARD\r\n";
     let card = VCard::parse(src).unwrap();
     assert_eq!(
         card.properties()[0].to_string(),
@@ -263,7 +265,7 @@ fn a_param_without_equals_errors() {
 #[test]
 fn unknown_and_x_properties_are_never_an_error() {
     // §6.10: extension properties are open-ended.
-    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nX-CUSTOM;X-P=1:v\r\nSOME-FUTURE-PROP:v\r\nEND:VCARD\r\n";
+    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nX-CUSTOM;X-P=1:v\r\nSOME-FUTURE-PROP:v\r\nFN:Test\r\nEND:VCARD\r\n";
     let card = VCard::parse(src).unwrap();
     assert!(matches!(card.properties()[0], Property::Xprop(_)));
     assert!(matches!(card.properties()[1], Property::Iana(_)));
@@ -274,7 +276,7 @@ fn parameters_are_written_back_in_their_one_spelling() {
     // Typed since #47: `TYPE="work,voice"` and `TYPE=work,voice` are the same
     // parameter, so the quoted list is written as the plain one. The
     // RFC 6868 caret-encoding of the extension parameter survives.
-    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nX-A;TYPE=\"work,voice\";X-B=^'q^':v\r\nEND:VCARD\r\n";
+    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nX-A;TYPE=\"work,voice\";X-B=^'q^':v\r\nFN:Test\r\nEND:VCARD\r\n";
     let card = VCard::parse(src).unwrap();
     assert_eq!(
         card.properties()[0].to_string(),
@@ -287,7 +289,7 @@ fn parameters_are_written_back_in_their_one_spelling() {
 #[test]
 fn folded_lines_are_unfolded_exactly() {
     // The single WSP after the CRLF is removed, and nothing else.
-    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nNOTE:This is a long descrip\r\n tion that exists o\r\n n a long line.\r\nEND:VCARD\r\n";
+    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nNOTE:This is a long descrip\r\n tion that exists o\r\n n a long line.\r\nFN:Test\r\nEND:VCARD\r\n";
     let card = VCard::parse(src).unwrap();
     assert_eq!(
         card.properties()[0].to_string(),
@@ -297,14 +299,14 @@ fn folded_lines_are_unfolded_exactly() {
 
 #[test]
 fn a_fold_may_use_a_tab() {
-    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nNOTE:ab\r\n\tcd\r\nEND:VCARD\r\n";
+    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nNOTE:ab\r\n\tcd\r\nFN:Test\r\nEND:VCARD\r\n";
     let card = VCard::parse(src).unwrap();
     assert_eq!(card.properties()[0].to_string(), "NOTE:abcd");
 }
 
 #[test]
 fn only_one_whitespace_char_is_removed_per_fold() {
-    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nNOTE:ab\r\n  cd\r\nEND:VCARD\r\n";
+    let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nNOTE:ab\r\n  cd\r\nFN:Test\r\nEND:VCARD\r\n";
     let card = VCard::parse(src).unwrap();
     assert_eq!(card.properties()[0].to_string(), "NOTE:ab cd");
 }
@@ -314,14 +316,14 @@ fn a_multibyte_char_split_across_a_fold_is_restored() {
     // §3.2: implementations SHOULD unfold so a split multi-octet sequence
     // is properly restored. "é" is C3 A9.
     let src =
-        b"BEGIN:VCARD\r\nVERSION:4.0\r\nNOTE:caf\xC3\r\n \xA9\r\nEND:VCARD\r\n";
+        b"BEGIN:VCARD\r\nVERSION:4.0\r\nNOTE:caf\xC3\r\n \xA9\r\nFN:Test\r\nEND:VCARD\r\n";
     let card = VCard::parse(src).unwrap();
     assert_eq!(card.properties()[0].to_string(), "NOTE:caf\u{e9}");
 }
 
 #[test]
 fn a_fold_may_split_the_begin_line() {
-    let src = b"BEGIN:VC\r\n ARD\r\nVERSION:4.0\r\nEND:VCARD\r\n";
+    let src = b"BEGIN:VC\r\n ARD\r\nVERSION:4.0\r\nFN:Test\r\nEND:VCARD\r\n";
     assert!(VCard::parse(src).is_ok());
 }
 

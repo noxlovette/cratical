@@ -1,6 +1,8 @@
 mod lexer;
 pub mod parser;
 pub(crate) mod token;
+#[cfg(feature = "rfc-6350")]
+pub(crate) use lexer::fold::write_folded;
 pub(crate) use lexer::{Lexer, LexerError};
 use parser::{ParseError, ParseResult};
 

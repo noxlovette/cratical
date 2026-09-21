@@ -10,21 +10,26 @@
 //! parameters from them. Only server-side CardDAV (WebDAV, XML, queries,
 //! filters) is out of scope.
 //!
-//! So far [`VCard::parse`] and [`VCard::parse_stream`] read a vCard's
-//! `VERSION` and every property of RFC 6350 §6 as its own type in
-//! [`properties`], group included; `X-` and unknown properties are kept
-//! whole. What needs the whole card (cardinality, required properties, what
-//! properties require of each other) isn't checked yet.
+//! [`VCard::parse`] and [`VCard::parse_stream`] read a vCard's `VERSION` and
+//! every property of RFC 6350 §6 as its own type in [`properties`], group
+//! included; `X-` and unknown properties are kept whole. A card is checked as
+//! a whole before it is handed back (see [`VCardBuilder`]), and a card built
+//! from code, with [`VCard::builder`], goes through the same checks. Writing
+//! a card with `Display` gives back what parses to the same card, folded at
+//! 75 octets.
 
 use crate::ast::{Lexer, LexerError};
 use thiserror::Error;
 
+mod builder;
 pub mod params;
 pub(crate) mod parser;
 pub mod properties;
 pub mod values;
 
-use properties::{Property, Version};
+pub use builder::VCardBuilder;
+use properties::{FormattedName, Property, Uid, Version};
+use std::fmt;
 
 /// A vCard object: `BEGIN:VCARD`, its properties, `END:VCARD`.
 ///
@@ -51,6 +56,41 @@ impl VCard {
     /// Every property but `VERSION`, in the order they were written.
     pub fn properties(&self) -> &[Property] {
         &self.properties
+    }
+
+    /// The `FN` properties, in order; there is at least one (§6.2.1).
+    pub fn formatted_names(&self) -> impl Iterator<Item = &FormattedName> {
+        self.properties.iter().filter_map(|p| match p {
+            Property::FormattedName(f) => Some(f),
+            _ => None,
+        })
+    }
+
+    /// The kind of object the card represents: its `KIND`, or "individual"
+    /// when it has none (§6.1.4).
+    pub fn kind(&self) -> values::Kind {
+        self.properties
+            .iter()
+            .find_map(|p| match p {
+                Property::Kind(k) => Some(k.value().clone()),
+                _ => None,
+            })
+            .unwrap_or(values::Kind::Individual)
+    }
+
+    /// The card's `UID`, if it has one. It is optional in RFC 6350, but a
+    /// CardDAV address object must have one (RFC 6352 §5.1), and this is
+    /// the cheap way to check.
+    pub fn uid(&self) -> Option<&Uid> {
+        self.properties.iter().find_map(|p| match p {
+            Property::Uid(u) => Some(u),
+            _ => None,
+        })
+    }
+
+    /// A [`VCardBuilder`] for a vCard 4.0 named `formatted_name`.
+    pub fn builder(formatted_name: FormattedName) -> VCardBuilder {
+        VCardBuilder::new(formatted_name)
     }
 
     /// Parses exactly one `BEGIN:VCARD ... END:VCARD` object, erroring on
@@ -90,6 +130,46 @@ impl VCard {
         }
         Ok(cards)
     }
+}
+
+impl fmt::Display for VCard {
+    /// Writes the card as RFC 6350 §3.3 has it: `BEGIN:VCARD`, `VERSION`,
+    /// the properties in order, `END:VCARD`, each line folded at 75 octets
+    /// (§3.2) and ended by CRLF. Parsing it gives back an equal card.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_line(f, "BEGIN:VCARD")?;
+        write_line(f, &self.version.to_string())?;
+        for property in &self.properties {
+            write_line(f, &property.to_string())?;
+        }
+        write_line(f, "END:VCARD")
+    }
+}
+
+fn write_line(f: &mut fmt::Formatter<'_>, line: &str) -> fmt::Result {
+    crate::ast::write_folded(f, line)
+}
+
+/// A card that breaks a rule of RFC 6350 that needs the whole card to
+/// tell, found by [`VCardBuilder::build`].
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ValidationError {
+    /// No `FN`: "This property is required to be present" (§6.2.1).
+    #[error("The vCard has no FN property")]
+    MissingFormattedName,
+
+    /// More than one instance of a property whose cardinality is `*1`,
+    /// instances sharing an `ALTID` counting as one (§5.4).
+    #[error("The vCard has more than one {0} property")]
+    TooMany(&'static str),
+
+    /// A `MEMBER` on a card that isn't `KIND:group` (§6.6.5).
+    #[error("MEMBER is only allowed when KIND is group")]
+    MemberWithoutGroup,
+
+    /// A `PID` whose source identifier has no `CLIENTPIDMAP` (§6.7.7).
+    #[error("PID source identifier {0} has no CLIENTPIDMAP")]
+    UnmappedPidSource(u32),
 }
 
 /// Error returned when vCard content fails to parse.
@@ -208,6 +288,10 @@ pub enum ParseError {
         /// The parameter.
         param: &'static str,
     },
+
+    /// The properties parsed, but the card as a whole breaks a rule.
+    #[error(transparent)]
+    Invalid(#[from] ValidationError),
 
     /// A property value that doesn't follow RFC 6350 §4.
     #[error(transparent)]

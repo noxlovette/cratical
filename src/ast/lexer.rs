@@ -250,6 +250,8 @@ impl Lexer {
     }
 }
 
+#[cfg(feature = "rfc-6350")]
+pub(crate) mod fold;
 pub(crate) mod unfold;
 
 #[cfg(test)]

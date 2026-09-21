@@ -12,9 +12,18 @@ use cratical::vcard::{
     },
 };
 
-/// A vCard holding `lines` after `VERSION`.
+/// A vCard holding `lines` after `VERSION`, and the `FN` every card needs
+/// (§6.2.1). MEMBER is only allowed on a `KIND:group` card (§6.6.5), so a
+/// card with one is made a group.
 fn wire(lines: &str) -> String {
-    format!("BEGIN:VCARD\r\nVERSION:4.0\r\n{lines}\r\nEND:VCARD\r\n")
+    let kind = if lines.contains("MEMBER") {
+        "\r\nKIND:group"
+    } else {
+        ""
+    };
+    format!(
+        "BEGIN:VCARD\r\nVERSION:4.0\r\n{lines}{kind}\r\nFN:Test\r\nEND:VCARD\r\n"
+    )
 }
 
 fn parse(lines: &str) -> Result<VCard, ParseError> {
@@ -838,10 +847,11 @@ fn clientpidmap_source_identifiers_are_strictly_positive() {
 fn the_rfc_pid_example_parses() {
     // §6.7.7's own example of how PID and CLIENTPIDMAP go together.
     let card = parse(
-        "TEL;PID=3.1,4.2;VALUE=uri:tel:+1-555-555-5555\r\nEMAIL;PID=4.1,5.2:jdoe@example.com\r\nCLIENTPIDMAP:1;urn:uuid:3df403f4-5924-4bb7-b077-3c711d9eb34b",
+        "TEL;PID=3.1,4.2;VALUE=uri:tel:+1-555-555-5555\r\nEMAIL;PID=4.1,5.2:jdoe@example.com\r\nCLIENTPIDMAP:1;urn:uuid:3df403f4-5924-4bb7-b077-3c711d9eb34b\r\nCLIENTPIDMAP:2;urn:uuid:d89c9c7a-2e1b-4832-82de-7e992d95faa5",
     )
     .unwrap();
-    assert_eq!(card.properties().len(), 3);
+    // The three lines, and the FN the helper adds.
+    assert_eq!(card.properties().len(), 5);
     assert_eq!(card.properties()[0].params().pid().len(), 2);
 }
 

@@ -1,4 +1,4 @@
-use super::{ParseError, VCard, properties::Property};
+use super::{ParseError, VCard, VCardBuilder, properties::Property};
 use crate::ast::token::{Token, TokenType};
 use TokenType::*;
 
@@ -101,10 +101,12 @@ impl Parser {
             return Err(ParseError::VersionNotFirst);
         }
 
-        Ok(VCard {
-            version,
-            properties,
-        })
+        // What needs the whole card is the builder's to check.
+        let mut builder = VCardBuilder::with_version(version);
+        for property in properties {
+            builder.ingest(property);
+        }
+        Ok(builder.build()?)
     }
 
     /// whether the next token is of type `t`
