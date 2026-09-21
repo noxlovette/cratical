@@ -123,6 +123,23 @@ pub struct Trigger {
 
 impl_try_from_bytes!(Trigger, DateTimeDuration, TriggerParams);
 
+impl Trigger {
+    /// Returns the trigger's value: a [`DateTimeDuration::Duration`] offset
+    /// from the component's start or end (see [`Trigger::related`]), or an
+    /// absolute [`DateTimeDuration::DateTime`].
+    pub fn value(&self) -> &DateTimeDuration {
+        &self.value
+    }
+
+    /// The `RELATED` parameter: which end of the component a `DURATION`
+    /// trigger is measured from. `None` means the RFC 5545 §3.2.14 default,
+    /// [`AlarmTriggerRelationship::Start`]. Meaningless for an absolute
+    /// `DATE-TIME` value.
+    pub fn related(&self) -> Option<&AlarmTriggerRelationship> {
+        self.params.trigger_relationship.as_ref()
+    }
+}
+
 impl std::fmt::Display for Trigger {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TRIGGER{}:{}", self.params, self.value)
