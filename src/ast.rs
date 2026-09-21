@@ -179,18 +179,18 @@ mod decode_caret_tests {
 #[derive(Debug)]
 enum Component {
     /// A scheduled event (`VEVENT`).
-    Event(EventBuilder),
+    Event(EventParseBuilder),
     /// A to-do task (`VTODO`).
-    Todo(TodoBuilder),
+    Todo(TodoParseBuilder),
     /// A journal entry (`VJOURNAL`).
-    Journal(JournalBuilder),
+    Journal(JournalParseBuilder),
     /// Free/busy time information (`VFREEBUSY`).
-    FreeBusy(FreeBusyBuilder),
+    FreeBusy(FreeBusyParseBuilder),
     /// Time zone definition (`VTIMEZONE`).
-    Timezone(TimezoneBuilder),
+    Timezone(TimezoneParseBuilder),
     /// Availability information (`VAVAILABILITY`, RFC 7953 §3.1).
     #[cfg(feature = "rfc-7953")]
-    Availability(AvailabilityBuilder),
+    Availability(AvailabilityParseBuilder),
     /// An unrecognized `iana-comp`/`x-comp` (RFC 5545 §3.6). See
     /// [`UnknownComponentBuilder`].
     Unknown(UnknownComponentBuilder),
@@ -243,38 +243,38 @@ impl From<UnknownComponentBuilder> for Component {
     }
 }
 
-impl From<EventBuilder> for Component {
-    fn from(value: EventBuilder) -> Self {
+impl From<EventParseBuilder> for Component {
+    fn from(value: EventParseBuilder) -> Self {
         Self::Event(value)
     }
 }
-impl From<TodoBuilder> for Component {
-    fn from(value: TodoBuilder) -> Self {
+impl From<TodoParseBuilder> for Component {
+    fn from(value: TodoParseBuilder) -> Self {
         Self::Todo(value)
     }
 }
 
-impl From<JournalBuilder> for Component {
-    fn from(value: JournalBuilder) -> Self {
+impl From<JournalParseBuilder> for Component {
+    fn from(value: JournalParseBuilder) -> Self {
         Self::Journal(value)
     }
 }
 
-impl From<FreeBusyBuilder> for Component {
-    fn from(value: FreeBusyBuilder) -> Self {
+impl From<FreeBusyParseBuilder> for Component {
+    fn from(value: FreeBusyParseBuilder) -> Self {
         Self::FreeBusy(value)
     }
 }
 
-impl From<TimezoneBuilder> for Component {
-    fn from(value: TimezoneBuilder) -> Self {
+impl From<TimezoneParseBuilder> for Component {
+    fn from(value: TimezoneParseBuilder) -> Self {
         Self::Timezone(value)
     }
 }
 
 #[cfg(feature = "rfc-7953")]
-impl From<AvailabilityBuilder> for Component {
-    fn from(value: AvailabilityBuilder) -> Self {
+impl From<AvailabilityParseBuilder> for Component {
+    fn from(value: AvailabilityParseBuilder) -> Self {
         Self::Availability(value)
     }
 }
@@ -302,7 +302,7 @@ impl Component {
     /// to contain one — `VEVENT`/`VTODO` only (RFC 5545 §3.6.1, §3.6.2).
     /// No other component can legally contain a `VALARM`, so this is a
     /// plain match rather than a trait every builder has to implement.
-    fn ingest_alarm(&mut self, alarm: AlarmBuilder) -> ParseResult<()> {
+    fn ingest_alarm(&mut self, alarm: AlarmParseBuilder) -> ParseResult<()> {
         match self {
             Self::Event(b) => {
                 b.alarms.push(alarm);
@@ -322,7 +322,7 @@ impl Component {
     #[cfg(feature = "rfc-7953")]
     fn ingest_available(
         &mut self,
-        available: AvailableBuilder,
+        available: AvailableParseBuilder,
     ) -> ParseResult<()> {
         match self {
             Self::Availability(b) => {
@@ -339,7 +339,7 @@ impl Component {
     fn ingest_tz_observance(
         &mut self,
         kind: TzObservanceKind,
-        tz_prop: TzPropBuilder,
+        tz_prop: TzPropParseBuilder,
     ) -> ParseResult<()> {
         match self {
             Self::Timezone(b) => {
@@ -355,7 +355,7 @@ impl Component {
 
     /// Builds this builder into its finished [`CalComponent`], validating
     /// whatever couldn't be checked property-by-property during ingest.
-    /// `has_method` is only consulted by [`EventBuilder::build`] (RFC 5545
+    /// `has_method` is only consulted by [`EventParseBuilder::build`] (RFC 5545
     /// §3.6.1's `DTSTART`/`METHOD` interaction) — every other component
     /// ignores it.
     fn build(self, has_method: bool) -> Result<CalComponent, ComponentError> {
@@ -964,7 +964,7 @@ impl Property {
 }
 
 #[derive(Default, Debug)]
-struct CalendarBuilder {
+struct CalendarParseBuilder {
     prodid: Option<ProductIdentifier>,
     version: Option<Version>,
     calscale: Option<CalendarScale>,
@@ -986,7 +986,7 @@ struct CalendarBuilder {
     components: Vec<Component>,
 }
 
-impl CalendarBuilder {
+impl CalendarParseBuilder {
     /// creates a new cal builder
     fn new() -> Self {
         Self::default()
@@ -1013,12 +1013,7 @@ impl CalendarBuilder {
             .into_iter()
             .map(|c| c.build(has_method))
             .collect::<Result<Vec<_>, _>>()?;
-        validate_timezones(&components)?;
-        validate_no_duplicate_uid(&components)?;
-        #[cfg(feature = "rfc-5546")]
-        if let Some(method) = &self.method {
-            crate::itip::validate(method, &components)?;
-        }
+        validate_calendar(self.method.as_ref(), &components)?;
 
         Ok(Calendar {
             prodid,
@@ -1042,10 +1037,30 @@ impl CalendarBuilder {
     }
 }
 
+/// Every check that needs the full set of already-built components — see
+/// the module docs' "spans more than one component" rule. Shared by
+/// `CalendarParseBuilder::build` (the parser's path) and the public
+/// [`crate::CalendarParseBuilder`], so a `Calendar` is held to the same rules
+/// however it was assembled.
+pub(crate) fn validate_calendar(
+    method: Option<&Method>,
+    components: &[CalComponent],
+) -> Result<(), ComponentError> {
+    validate_timezones(components)?;
+    validate_no_duplicate_uid(components)?;
+    #[cfg(feature = "rfc-5546")]
+    if let Some(method) = method {
+        crate::itip::validate(method, components)?;
+    }
+    #[cfg(not(feature = "rfc-5546"))]
+    let _ = method;
+    Ok(())
+}
+
 /// RFC 5545 §3.6.5 also says multiple `VTIMEZONE`s "MUST represent a unique
 /// time zone definition" each — checked here since it's calendar-wide (needs
 /// every `VTIMEZONE` in the object), so this runs once in
-/// `CalendarBuilder::build`, after every component has already been
+/// `CalendarParseBuilder::build`, after every component has already been
 /// individually validated and built.
 ///
 /// This function does *not* enforce the RFC's related requirement that "An
@@ -1188,7 +1203,7 @@ pub enum ComponentError {
 }
 
 #[derive(Debug, Default)]
-struct EventBuilder {
+struct EventParseBuilder {
     dtstamp: Option<DateTimeStamp>,
     uid: Option<Uid>,
     /// The following is REQUIRED if the component
@@ -1230,10 +1245,10 @@ struct EventBuilder {
     conference: Vec<Conference>,
     xprop: Vec<Xprop>,
     iana: Vec<Iana>,
-    alarms: Vec<AlarmBuilder>,
+    alarms: Vec<AlarmParseBuilder>,
 }
 
-impl EventBuilder {
+impl EventParseBuilder {
     fn new() -> Self {
         Self::default()
     }
@@ -1263,7 +1278,7 @@ impl EventBuilder {
         let alarms = self
             .alarms
             .into_iter()
-            .map(AlarmBuilder::build)
+            .map(AlarmParseBuilder::build)
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Event {
@@ -1309,7 +1324,7 @@ impl EventBuilder {
     }
 }
 
-impl PropertyIngest for EventBuilder {
+impl PropertyIngest for EventParseBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {
             Property::DateTimeStamp(v) => {
@@ -1382,7 +1397,7 @@ impl PropertyIngest for EventBuilder {
 }
 
 #[derive(Debug, Default)]
-struct TodoBuilder {
+struct TodoParseBuilder {
     dtstamp: Option<DateTimeStamp>,
     uid: Option<Uid>,
     class: Option<Classification>,
@@ -1420,10 +1435,10 @@ struct TodoBuilder {
     conference: Vec<Conference>,
     xprop: Vec<Xprop>,
     iana: Vec<Iana>,
-    alarms: Vec<AlarmBuilder>,
+    alarms: Vec<AlarmParseBuilder>,
 }
 
-impl TodoBuilder {
+impl TodoParseBuilder {
     fn new() -> Self {
         Self::default()
     }
@@ -1451,7 +1466,7 @@ impl TodoBuilder {
         let alarms = self
             .alarms
             .into_iter()
-            .map(AlarmBuilder::build)
+            .map(AlarmParseBuilder::build)
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Todo {
@@ -1498,7 +1513,7 @@ impl TodoBuilder {
     }
 }
 
-impl PropertyIngest for TodoBuilder {
+impl PropertyIngest for TodoParseBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {
             Property::DateTimeStamp(v) => {
@@ -1585,7 +1600,7 @@ impl PropertyIngest for TodoBuilder {
 /// actually applies, and whether this alarm satisfies it, is a `build()`-
 /// time check once `ACTION` is known.
 #[derive(Debug, Default)]
-struct AlarmBuilder {
+struct AlarmParseBuilder {
     action: Option<Action>,
     trigger: Option<Trigger>,
     // DURATION and REPEAT are optional but MUST appear together (RFC 5545
@@ -1608,12 +1623,12 @@ struct AlarmBuilder {
     // RFC 9073 §7.2 `VLOCATION` sub-components — legal only alongside
     // `PROXIMITY` (RFC 9074 §8), a cross-field rule checked in `build()`.
     #[cfg(feature = "rfc-9074")]
-    locations: Vec<VLocationBuilder>,
+    locations: Vec<VLocationParseBuilder>,
     xprop: Vec<Xprop>,
     iana: Vec<Iana>,
 }
 
-impl AlarmBuilder {
+impl AlarmParseBuilder {
     fn new() -> Self {
         Self::default()
     }
@@ -1710,7 +1725,7 @@ impl AlarmBuilder {
         let locations = self
             .locations
             .into_iter()
-            .map(VLocationBuilder::build)
+            .map(VLocationParseBuilder::build)
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Alarm {
@@ -1738,7 +1753,7 @@ impl AlarmBuilder {
     }
 }
 
-impl PropertyIngest for AlarmBuilder {
+impl PropertyIngest for AlarmParseBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {
             Property::Action(v) => set_once(&mut self.action, v, "ACTION"),
@@ -1774,11 +1789,11 @@ impl PropertyIngest for AlarmBuilder {
 
 /// Builder for `VLOCATION` (RFC 9073 §7.2), nested only inside `VALARM`
 /// when a `PROXIMITY` property is also present (RFC 9074 §8) — same shape
-/// as `AlarmBuilder.locations`'s sibling builders elsewhere in this module
-/// (e.g. `AvailableBuilder`).
+/// as `AlarmParseBuilder.locations`'s sibling builders elsewhere in this module
+/// (e.g. `AvailableParseBuilder`).
 #[cfg(feature = "rfc-9074")]
 #[derive(Debug, Default)]
-struct VLocationBuilder {
+struct VLocationParseBuilder {
     uid: Option<Uid>,
     name: Option<Name>,
     description: Option<Description>,
@@ -1790,7 +1805,7 @@ struct VLocationBuilder {
 }
 
 #[cfg(feature = "rfc-9074")]
-impl VLocationBuilder {
+impl VLocationParseBuilder {
     fn new() -> Self {
         Self::default()
     }
@@ -1812,7 +1827,7 @@ impl VLocationBuilder {
 }
 
 #[cfg(feature = "rfc-9074")]
-impl PropertyIngest for VLocationBuilder {
+impl PropertyIngest for VLocationParseBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {
             Property::Uid(v) => set_once(&mut self.uid, v, "UID"),
@@ -1834,7 +1849,7 @@ impl PropertyIngest for VLocationBuilder {
     }
 }
 
-impl FreeBusyBuilder {
+impl FreeBusyParseBuilder {
     fn new() -> Self {
         Self::default()
     }
@@ -1866,7 +1881,7 @@ impl FreeBusyBuilder {
     }
 }
 
-impl PropertyIngest for FreeBusyBuilder {
+impl PropertyIngest for FreeBusyParseBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {
             Property::DateTimeStamp(v) => {
@@ -1894,7 +1909,7 @@ impl PropertyIngest for FreeBusyBuilder {
         }
     }
 }
-impl JournalBuilder {
+impl JournalParseBuilder {
     fn new() -> Self {
         Self::default()
     }
@@ -1943,7 +1958,7 @@ impl JournalBuilder {
     }
 }
 
-impl PropertyIngest for JournalBuilder {
+impl PropertyIngest for JournalParseBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {
             Property::DateTimeStamp(v) => {
@@ -1994,7 +2009,7 @@ impl PropertyIngest for JournalBuilder {
     }
 }
 #[derive(Debug, Default)]
-struct FreeBusyBuilder {
+struct FreeBusyParseBuilder {
     dtstamp: Option<DateTimeStamp>,
     uid: Option<Uid>,
     contact: Option<Contact>,
@@ -2011,7 +2026,7 @@ struct FreeBusyBuilder {
 }
 
 #[derive(Debug, Default)]
-struct JournalBuilder {
+struct JournalParseBuilder {
     dtstamp: Option<DateTimeStamp>,
     uid: Option<Uid>,
     class: Option<Classification>,
@@ -2049,17 +2064,17 @@ struct JournalBuilder {
 /// place that enforces "at least one of either" once every property and
 /// sub-component has been seen.
 #[derive(Debug, Default)]
-struct TimezoneBuilder {
+struct TimezoneParseBuilder {
     tzid: Option<TimeZoneIdentifier>,
     last_mod: Option<LastModified>,
     tzurl: Option<TimeZoneUrl>,
     xprop: Vec<Xprop>,
     iana: Vec<Iana>,
-    standardc: Vec<TzPropBuilder>,
-    daylightc: Vec<TzPropBuilder>,
+    standardc: Vec<TzPropParseBuilder>,
+    daylightc: Vec<TzPropParseBuilder>,
 }
 
-impl TimezoneBuilder {
+impl TimezoneParseBuilder {
     fn new() -> Self {
         Self::default()
     }
@@ -2079,12 +2094,12 @@ impl TimezoneBuilder {
         let standardc = self
             .standardc
             .into_iter()
-            .map(TzPropBuilder::build)
+            .map(TzPropParseBuilder::build)
             .collect::<Result<Vec<_>, _>>()?;
         let daylightc = self
             .daylightc
             .into_iter()
-            .map(TzPropBuilder::build)
+            .map(TzPropParseBuilder::build)
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Timezone {
@@ -2099,7 +2114,7 @@ impl TimezoneBuilder {
     }
 }
 
-impl PropertyIngest for TimezoneBuilder {
+impl PropertyIngest for TimezoneParseBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {
             Property::TimeZoneIdentifier(v) => {
@@ -2116,7 +2131,7 @@ impl PropertyIngest for TimezoneBuilder {
     }
 }
 
-/// Which sub-component produced a given [`TzPropBuilder`] — `STANDARD` and
+/// Which sub-component produced a given [`TzPropParseBuilder`] — `STANDARD` and
 /// `DAYLIGHT` (RFC 5545 §3.6.5) share an identical `tzprop` property
 /// grammar and differ only in which of `VTIMEZONE`'s two observance lists
 /// they belong to.
@@ -2129,7 +2144,7 @@ enum TzObservanceKind {
 /// sub-components (RFC 5545 §3.6.5). Nested only inside `VTIMEZONE`, via
 /// [`Component::ingest_tz_observance`].
 #[derive(Debug, Default)]
-struct TzPropBuilder {
+struct TzPropParseBuilder {
     dtstart: Option<DateTimeStart>,
     tz_offset_to: Option<TimeZoneOffsetTo>,
     tz_offset_from: Option<TimeZoneOffsetFrom>,
@@ -2143,7 +2158,7 @@ struct TzPropBuilder {
     iana: Vec<Iana>,
 }
 
-impl TzPropBuilder {
+impl TzPropParseBuilder {
     fn new() -> Self {
         Self::default()
     }
@@ -2176,7 +2191,7 @@ impl TzPropBuilder {
     }
 }
 
-impl PropertyIngest for TzPropBuilder {
+impl PropertyIngest for TzPropParseBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {
             Property::DateTimeStart(v) => {
@@ -2202,10 +2217,10 @@ impl PropertyIngest for TzPropBuilder {
 /// Builder for `VAVAILABILITY` (RFC 7953 §3.1). `available` holds its nested
 /// `AVAILABLE` sub-components (see
 /// [`crate::ast::parser::Parser::available`]) — same shape as
-/// `EventBuilder.alarms`/`TodoBuilder.alarms`.
+/// `EventParseBuilder.alarms`/`TodoParseBuilder.alarms`.
 #[cfg(feature = "rfc-7953")]
 #[derive(Debug, Default)]
-struct AvailabilityBuilder {
+struct AvailabilityParseBuilder {
     dtstamp: Option<DateTimeStamp>,
     uid: Option<Uid>,
     busytype: Option<BusyType>,
@@ -2227,11 +2242,11 @@ struct AvailabilityBuilder {
     contact: Vec<Contact>,
     xprop: Vec<Xprop>,
     iana: Vec<Iana>,
-    available: Vec<AvailableBuilder>,
+    available: Vec<AvailableParseBuilder>,
 }
 
 #[cfg(feature = "rfc-7953")]
-impl AvailabilityBuilder {
+impl AvailabilityParseBuilder {
     fn new() -> Self {
         Self::default()
     }
@@ -2254,7 +2269,7 @@ impl AvailabilityBuilder {
         let available = self
             .available
             .into_iter()
-            .map(AvailableBuilder::build)
+            .map(AvailableParseBuilder::build)
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Availability {
@@ -2287,7 +2302,7 @@ impl AvailabilityBuilder {
 }
 
 #[cfg(feature = "rfc-7953")]
-impl PropertyIngest for AvailabilityBuilder {
+impl PropertyIngest for AvailabilityParseBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {
             Property::DateTimeStamp(v) => {
@@ -2347,7 +2362,7 @@ impl PropertyIngest for AvailabilityBuilder {
 /// `VAVAILABILITY` component.
 #[cfg(feature = "rfc-7953")]
 #[derive(Debug, Default)]
-struct AvailableBuilder {
+struct AvailableParseBuilder {
     dtstamp: Option<DateTimeStamp>,
     dtstart: Option<DateTimeStart>,
     uid: Option<Uid>,
@@ -2370,7 +2385,7 @@ struct AvailableBuilder {
 }
 
 #[cfg(feature = "rfc-7953")]
-impl AvailableBuilder {
+impl AvailableParseBuilder {
     fn new() -> Self {
         Self::default()
     }
@@ -2419,7 +2434,7 @@ impl AvailableBuilder {
 }
 
 #[cfg(feature = "rfc-7953")]
-impl PropertyIngest for AvailableBuilder {
+impl PropertyIngest for AvailableParseBuilder {
     fn ingest(&mut self, p: Property) -> ParseResult<()> {
         match p {
             Property::DateTimeStamp(v) => {
@@ -2473,8 +2488,8 @@ mod build_tests {
         Property::parse(name, remainder).unwrap()
     }
 
-    fn minimal_event() -> EventBuilder {
-        let mut b = EventBuilder::new();
+    fn minimal_event() -> EventParseBuilder {
+        let mut b = EventParseBuilder::new();
         b.ingest(prop(b"DTSTAMP", b":19970901T130000Z")).unwrap();
         b.ingest(prop(b"UID", b":123@example.com")).unwrap();
         b.ingest(prop(b"DTSTART", b":19970903T163000Z")).unwrap();
@@ -2610,7 +2625,7 @@ mod build_tests {
         assert!(b.build(true).is_ok());
     }
 
-    fn minimal_event_with_zoned_dtstart() -> EventBuilder {
+    fn minimal_event_with_zoned_dtstart() -> EventParseBuilder {
         let mut b = minimal_event();
         b.dtstart = Some(
             DateTimeStart::try_from(
@@ -2678,8 +2693,8 @@ mod build_tests {
         ));
     }
 
-    fn minimal_todo() -> TodoBuilder {
-        let mut b = TodoBuilder::new();
+    fn minimal_todo() -> TodoParseBuilder {
+        let mut b = TodoParseBuilder::new();
         b.ingest(prop(b"DTSTAMP", b":19970901T130000Z")).unwrap();
         b.ingest(prop(b"UID", b":123@example.com")).unwrap();
         b
@@ -2742,8 +2757,8 @@ mod build_tests {
         ));
     }
 
-    fn minimal_alarm(action: &[u8]) -> AlarmBuilder {
-        let mut b = AlarmBuilder::new();
+    fn minimal_alarm(action: &[u8]) -> AlarmParseBuilder {
+        let mut b = AlarmParseBuilder::new();
         b.ingest(prop(b"ACTION", action)).unwrap();
         b.ingest(prop(b"TRIGGER", b":-PT15M")).unwrap();
         b
@@ -2752,11 +2767,11 @@ mod build_tests {
     #[test]
     fn alarm_requires_action_and_trigger() {
         assert!(matches!(
-            AlarmBuilder::new().build(),
+            AlarmParseBuilder::new().build(),
             Err(ComponentError::MissingField("ACTION"))
         ));
 
-        let mut with_action = AlarmBuilder::new();
+        let mut with_action = AlarmParseBuilder::new();
         with_action.ingest(prop(b"ACTION", b":AUDIO")).unwrap();
         assert!(matches!(
             with_action.build(),
@@ -2836,8 +2851,8 @@ mod build_tests {
         assert!(minimal_alarm(b":AUDIO").build().is_ok());
     }
 
-    fn minimal_tz_prop() -> TzPropBuilder {
-        let mut b = TzPropBuilder::new();
+    fn minimal_tz_prop() -> TzPropParseBuilder {
+        let mut b = TzPropParseBuilder::new();
         b.ingest(prop(b"DTSTART", b":19710101T020000")).unwrap();
         b.ingest(prop(b"TZOFFSETFROM", b":-0400")).unwrap();
         b.ingest(prop(b"TZOFFSETTO", b":-0500")).unwrap();
@@ -2846,7 +2861,7 @@ mod build_tests {
 
     #[test]
     fn timezone_requires_at_least_one_observance() {
-        let mut b = TimezoneBuilder::new();
+        let mut b = TimezoneParseBuilder::new();
         b.ingest(prop(b"TZID", b":America/New_York")).unwrap();
         assert!(matches!(
             b.build(),
@@ -2859,7 +2874,7 @@ mod build_tests {
 
     #[test]
     fn timezone_builds_with_one_standard_observance() {
-        let mut b = TimezoneBuilder::new();
+        let mut b = TimezoneParseBuilder::new();
         b.ingest(prop(b"TZID", b":America/New_York")).unwrap();
         b.standardc.push(minimal_tz_prop());
         assert!(b.build().is_ok());
@@ -2868,7 +2883,7 @@ mod build_tests {
     #[test]
     fn tz_prop_requires_dtstart_and_offsets() {
         assert!(matches!(
-            TzPropBuilder::new().build(),
+            TzPropParseBuilder::new().build(),
             Err(ComponentError::MissingField("DTSTART"))
         ));
     }
@@ -2899,8 +2914,8 @@ mod build_tests {
         ));
     }
 
-    fn minimal_journal() -> JournalBuilder {
-        let mut b = JournalBuilder::new();
+    fn minimal_journal() -> JournalParseBuilder {
+        let mut b = JournalParseBuilder::new();
         b.ingest(prop(b"DTSTAMP", b":19970901T130000Z")).unwrap();
         b.ingest(prop(b"UID", b":123@example.com")).unwrap();
         b.ingest(prop(b"DTSTART", b";VALUE=DATE:19970317")).unwrap();
@@ -2925,8 +2940,8 @@ mod build_tests {
         assert!(b.build().is_ok());
     }
 
-    fn minimal_freebusy() -> FreeBusyBuilder {
-        let mut b = FreeBusyBuilder::new();
+    fn minimal_freebusy() -> FreeBusyParseBuilder {
+        let mut b = FreeBusyParseBuilder::new();
         b.ingest(prop(b"DTSTAMP", b":19970901T083000Z")).unwrap();
         b.ingest(prop(b"UID", b":123@example.com")).unwrap();
         b.ingest(prop(b"DTSTART", b":19971015T050000Z")).unwrap();
@@ -2954,11 +2969,11 @@ mod build_tests {
     #[test]
     fn calendar_requires_prodid_version_and_a_component() {
         assert!(matches!(
-            CalendarBuilder::new().build(),
+            CalendarParseBuilder::new().build(),
             Err(ComponentError::MissingField("PRODID"))
         ));
 
-        let mut with_prodid = CalendarBuilder::new();
+        let mut with_prodid = CalendarParseBuilder::new();
         with_prodid.prodid = Some(
             ProductIdentifier::try_from(b":-//example//EN".as_slice()).unwrap(),
         );
@@ -2967,7 +2982,7 @@ mod build_tests {
             Err(ComponentError::MissingField("VERSION"))
         ));
 
-        let mut with_version = CalendarBuilder::new();
+        let mut with_version = CalendarParseBuilder::new();
         with_version.prodid = Some(
             ProductIdentifier::try_from(b":-//example//EN".as_slice()).unwrap(),
         );
@@ -2981,7 +2996,7 @@ mod build_tests {
             ))
         ));
 
-        let mut complete = CalendarBuilder::new();
+        let mut complete = CalendarParseBuilder::new();
         complete.prodid = Some(
             ProductIdentifier::try_from(b":-//example//EN".as_slice()).unwrap(),
         );
@@ -2990,8 +3005,8 @@ mod build_tests {
         assert!(complete.build().is_ok());
     }
 
-    fn minimal_calendar(components: Vec<Component>) -> CalendarBuilder {
-        let mut b = CalendarBuilder::new();
+    fn minimal_calendar(components: Vec<Component>) -> CalendarParseBuilder {
+        let mut b = CalendarParseBuilder::new();
         b.prodid = Some(
             ProductIdentifier::try_from(b":-//example//EN".as_slice()).unwrap(),
         );
@@ -3000,8 +3015,8 @@ mod build_tests {
         b
     }
 
-    fn minimal_timezone(tzid: &[u8]) -> TimezoneBuilder {
-        let mut b = TimezoneBuilder::new();
+    fn minimal_timezone(tzid: &[u8]) -> TimezoneParseBuilder {
+        let mut b = TimezoneParseBuilder::new();
         b.ingest(prop(b"TZID", tzid)).unwrap();
         b.standardc.push(minimal_tz_prop());
         b

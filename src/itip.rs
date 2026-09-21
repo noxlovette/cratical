@@ -560,7 +560,7 @@ fn same_uid<'a>(
 
 /// Validates `components` against RFC 5546's restriction tables for
 /// `method`, if `method_prop`'s value names one of the 8 recognized iTIP
-/// methods (a no-op otherwise). Called once from `CalendarBuilder::build`
+/// methods (a no-op otherwise). Called once from `CalendarParseBuilder::build`
 /// after every component has already been individually built (so RFC 5545
 /// core validation has already run).
 pub(crate) fn validate(

@@ -4,7 +4,7 @@
 pub(crate) mod ast;
 pub use ast::ComponentError;
 mod calendar;
-pub use calendar::{Calendar, CalendarParseError, Component};
+pub use calendar::{Calendar, CalendarBuilder, CalendarParseError, Component};
 /// As specified [in the RFC Section 3.6](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6)
 pub mod components;
 /// Sections 3.7 and 3.8 of the RFC
