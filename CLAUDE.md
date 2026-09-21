@@ -12,6 +12,8 @@ Components MUST NOT USE ANYTHING OTHER THAN PROPERTIES
 
 Properties MUST have a value and a params struct fields. The value field MUST contain only values from value.rs. Params must only contain values from params.rs, no exceptions
 
+The `vcard` module (behind `rfc-6350`/`rfc-2426`) is a module of its own, not part of the iCalendar model. The rules above apply to it with "the module's own" files: vCard properties hold only values from `src/vcard/values.rs` and params from `src/vcard/params.rs`, never iCalendar-specific types from the top-level `values.rs`/`params.rs`. The format-agnostic primitives (`Text`, `Uri`, `Binary`, `Boolean`, `Integer`, `Float`, `UtcOffset`, `MediaType`) may be reused from the top-level `values.rs` and re-exposed through `vcard/values.rs`, so vCard properties still reference values from one place. Same-named types with different semantics (`ValueDataType`, `Uid`, date/time) are defined separately in `vcard/`, never shared.
+
 ## Parser & builder architecture
 
 The parser (`src/ast/parser.rs`) is recursive-descent, single-token lookahead.
