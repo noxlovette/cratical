@@ -1,15 +1,16 @@
 use super::token::Token;
 #[cfg(feature = "rfc-9074")]
-use crate::ast::VLocationBuilder;
+use crate::ast::VLocationParseBuilder;
 #[cfg(feature = "rfc-7953")]
-use crate::ast::{AvailabilityBuilder, AvailableBuilder};
+use crate::ast::{AvailabilityParseBuilder, AvailableParseBuilder};
 use crate::{
     Calendar,
     ast::{
-        AlarmBuilder, CalendarBuilder, Component, ComponentError, EventBuilder,
-        FreeBusyBuilder, JournalBuilder, Property, PropertyIngest,
-        TimezoneBuilder, TodoBuilder, TzObservanceKind, TzPropBuilder,
-        UnknownComponentBuilder, token::TokenType,
+        AlarmParseBuilder, CalendarParseBuilder, Component, ComponentError,
+        EventParseBuilder, FreeBusyParseBuilder, JournalParseBuilder, Property,
+        PropertyIngest, TimezoneParseBuilder, TodoParseBuilder,
+        TzObservanceKind, TzPropParseBuilder, UnknownComponentBuilder,
+        token::TokenType,
     },
     params::ParamError,
     properties::{ParameterError, PropertyError},
@@ -60,7 +61,7 @@ impl Parser {
         }
         self.consume(Crlf, "expected crlf after BEGIN")?;
 
-        let mut cal = CalendarBuilder::new();
+        let mut cal = CalendarParseBuilder::new();
 
         // Calendar properties (§3.7) precede any component.
         while !self.check(Begin)? {
@@ -141,13 +142,13 @@ impl Parser {
         let name = begin.literal().to_vec();
 
         let mut component: Component = match name.as_slice() {
-            b"VEVENT" => EventBuilder::new().into(),
-            b"VTODO" => TodoBuilder::new().into(),
-            b"VJOURNAL" => JournalBuilder::new().into(),
-            b"VFREEBUSY" => FreeBusyBuilder::new().into(),
-            b"VTIMEZONE" => TimezoneBuilder::new().into(),
+            b"VEVENT" => EventParseBuilder::new().into(),
+            b"VTODO" => TodoParseBuilder::new().into(),
+            b"VJOURNAL" => JournalParseBuilder::new().into(),
+            b"VFREEBUSY" => FreeBusyParseBuilder::new().into(),
+            b"VTIMEZONE" => TimezoneParseBuilder::new().into(),
             #[cfg(feature = "rfc-7953")]
-            b"VAVAILABILITY" => AvailabilityBuilder::new().into(),
+            b"VAVAILABILITY" => AvailabilityParseBuilder::new().into(),
             // An unrecognized `iana-comp`/`x-comp` (RFC 5545 §3.6). Not an
             // error — the RFC requires applications to ignore a component
             // type they don't recognize, and discourages silently dropping
@@ -206,12 +207,12 @@ impl Parser {
     /// §3.6.6). This is deliberately not a recursive call into
     /// [`Self::component`]: `VALARM` is a distinct grammar production with
     /// its own alphabet of legal properties and its own builder type
-    /// ([`AlarmBuilder`], not [`Component`]). Under the `rfc-9074` feature,
-    /// a `VALARM` can itself nest `VLOCATION` sub-components (RFC 9073
-    /// §7.2, via RFC 9074 §8's proximity extension) — same dispatch-by-name
-    /// shape as [`Self::component`]'s own nested-`BEGIN` handling, just with
-    /// a single legal name instead of several.
-    fn alarm(&mut self) -> ParseResult<AlarmBuilder> {
+    /// ([`AlarmParseBuilder`], not [`Component`]). Under the `rfc-9074`
+    /// feature, a `VALARM` can itself nest `VLOCATION` sub-components (RFC
+    /// 9073 §7.2, via RFC 9074 §8's proximity extension) — same
+    /// dispatch-by-name shape as [`Self::component`]'s own nested-`BEGIN`
+    /// handling, just with a single legal name instead of several.
+    fn alarm(&mut self) -> ParseResult<AlarmParseBuilder> {
         let begin =
             self.consume(Begin, "expected sub-component to start with BEGIN")?;
         if begin.literal() != b"VALARM" {
@@ -219,7 +220,7 @@ impl Parser {
         }
         self.consume(Crlf, "expected crlf after BEGIN")?;
 
-        let mut alarm = AlarmBuilder::new();
+        let mut alarm = AlarmParseBuilder::new();
         while !self.check(End)? {
             if self.check(Begin)? {
                 match self.peek()?.literal() {
@@ -252,9 +253,9 @@ impl Parser {
     /// parses one `BEGIN:VLOCATION ... END:VLOCATION` sub-component (RFC
     /// 9073 §7.2), nested only inside `VALARM` — same shape as
     /// [`Self::alarm`]/[`Self::available`]: its own grammar production, its
-    /// own builder type ([`VLocationBuilder`]), no further nesting.
+    /// own builder type ([`VLocationParseBuilder`]), no further nesting.
     #[cfg(feature = "rfc-9074")]
-    fn location(&mut self) -> ParseResult<VLocationBuilder> {
+    fn location(&mut self) -> ParseResult<VLocationParseBuilder> {
         let begin =
             self.consume(Begin, "expected sub-component to start with BEGIN")?;
         if begin.literal() != b"VLOCATION" {
@@ -262,7 +263,7 @@ impl Parser {
         }
         self.consume(Crlf, "expected crlf after BEGIN")?;
 
-        let mut location = VLocationBuilder::new();
+        let mut location = VLocationParseBuilder::new();
         while !self.check(End)? {
             let prop = self.consume(Property, "expected a property line")?;
             let property = Property::parse(prop.lexeme(), prop.literal())?;
@@ -283,9 +284,9 @@ impl Parser {
     /// parses one `BEGIN:AVAILABLE ... END:AVAILABLE` sub-component (RFC
     /// 7953 §3.1), nested only inside `VAVAILABILITY` — same shape as
     /// [`Self::alarm`]: its own grammar production, its own builder type
-    /// ([`AvailableBuilder`], not [`Component`]), no further nesting.
+    /// ([`AvailableParseBuilder`], not [`Component`]), no further nesting.
     #[cfg(feature = "rfc-7953")]
-    fn available(&mut self) -> ParseResult<AvailableBuilder> {
+    fn available(&mut self) -> ParseResult<AvailableParseBuilder> {
         let begin =
             self.consume(Begin, "expected sub-component to start with BEGIN")?;
         if begin.literal() != b"AVAILABLE" {
@@ -293,7 +294,7 @@ impl Parser {
         }
         self.consume(Crlf, "expected crlf after BEGIN")?;
 
-        let mut available = AvailableBuilder::new();
+        let mut available = AvailableParseBuilder::new();
         while !self.check(End)? {
             let prop = self.consume(Property, "expected a property line")?;
             let property = Property::parse(prop.lexeme(), prop.literal())?;
@@ -315,10 +316,10 @@ impl Parser {
     /// END:DAYLIGHT` sub-component (RFC 5545 §3.6.5) — structurally the
     /// same shape as [`Self::alarm`]: its own grammar production
     /// (`STANDARD`/`DAYLIGHT` share one property alphabet, `tzprop`), its
-    /// own builder type ([`TzPropBuilder`]), no further nesting.
+    /// own builder type ([`TzPropParseBuilder`]), no further nesting.
     fn tz_observance(
         &mut self,
-    ) -> ParseResult<(TzObservanceKind, TzPropBuilder)> {
+    ) -> ParseResult<(TzObservanceKind, TzPropParseBuilder)> {
         let begin =
             self.consume(Begin, "expected sub-component to start with BEGIN")?;
         let kind = match begin.literal() {
@@ -329,7 +330,7 @@ impl Parser {
         let name = begin.literal().to_vec();
         self.consume(Crlf, "expected crlf after BEGIN")?;
 
-        let mut tz_prop = TzPropBuilder::new();
+        let mut tz_prop = TzPropParseBuilder::new();
         while !self.check(End)? {
             let prop = self.consume(Property, "expected a property line")?;
             let property = Property::parse(prop.lexeme(), prop.literal())?;

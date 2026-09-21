@@ -67,7 +67,7 @@ fn vavailability_example_2_is_not_a_full_calendar_object() {
 /// top-level `VAVAILABILITY` components each parse as real
 /// `Component::Availability` values — but the fixture itself is missing the
 /// calendar-level `PRODID`/`VERSION` properties RFC 5545 §3.4 requires, so
-/// `CalendarBuilder::build` still rejects it. Still an `Err`, for a reason
+/// `CalendarParseBuilder::build` still rejects it. Still an `Err`, for a reason
 /// unrelated to `VAVAILABILITY` support.
 #[test]
 fn vavailability_example_3_missing_prodid_and_version() {
