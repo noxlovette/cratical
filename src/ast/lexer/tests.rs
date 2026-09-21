@@ -327,3 +327,132 @@ fn folded_content_line_with_bare_lf_is_unfolded_before_scanning() {
         ],
     );
 }
+
+// ---- vCard mode (RFC 6350 §3.3) ----
+
+#[cfg(feature = "rfc-6350")]
+mod vcard {
+    use super::*;
+
+    fn lex_vcard(src: &[u8]) -> Result<Vec<Token>, LexerError> {
+        Lexer::vcard(src).scan()
+    }
+
+    #[test]
+    fn a_group_prefix_lands_on_the_token_not_the_name() {
+        let tokens = lex_vcard(b"item1.TEL;TYPE=CELL:+1 555\r\n").unwrap();
+        assert_tokens(
+            tokens,
+            vec![
+                Token::new(
+                    TokenType::Property,
+                    b"TEL",
+                    Some(b";TYPE=CELL:+1 555"),
+                    0,
+                )
+                .with_group(b"item1"),
+                Token::new(TokenType::Crlf, b"\r\n", None, 0),
+                Token::new(TokenType::Eof, b"", None, 1),
+            ],
+        );
+    }
+
+    #[test]
+    fn the_group_keeps_its_case_but_the_name_is_case_folded() {
+        // §3.3: "Group and name are case-insensitive." Only the name is
+        // normalized; the group is kept as written so it round-trips.
+        let tokens = lex_vcard(b"Item1.tel:1\r\n").unwrap();
+        assert_eq!(tokens[0].group(), Some(b"Item1".as_slice()));
+        assert_eq!(tokens[0].lexeme(), b"TEL");
+    }
+
+    #[test]
+    fn group_characters_are_alpha_digit_and_hyphen() {
+        let tokens = lex_vcard(b"a-1-B.X-ABLABEL:Home\r\n").unwrap();
+        assert_eq!(tokens[0].group(), Some(b"a-1-B".as_slice()));
+        assert_eq!(tokens[0].lexeme(), b"X-ABLABEL");
+    }
+
+    #[test]
+    fn a_line_without_a_group_has_none() {
+        let tokens = lex_vcard(b"FN:John\r\n").unwrap();
+        assert_eq!(tokens[0].group(), None);
+    }
+
+    #[test]
+    fn a_group_with_no_property_name_errors() {
+        assert!(matches!(
+            lex_vcard(b"item1.:x\r\n"),
+            Err(LexerError::EmptyName { line: 0 })
+        ));
+    }
+
+    #[test]
+    fn a_line_starting_with_a_dot_errors() {
+        assert!(matches!(
+            lex_vcard(b".TEL:x\r\n"),
+            Err(LexerError::UnknownLexeme { line: 0, got: b'.' })
+        ));
+    }
+
+    #[test]
+    fn begin_and_end_cannot_carry_a_group() {
+        assert!(matches!(
+            lex_vcard(b"item1.BEGIN:VCARD\r\n"),
+            Err(LexerError::GroupedComponent { line: 0 })
+        ));
+        assert!(matches!(
+            lex_vcard(b"item1.END:VCARD\r\n"),
+            Err(LexerError::GroupedComponent { line: 0 })
+        ));
+    }
+
+    #[test]
+    fn begin_vcard_tokenizes_like_any_component() {
+        let tokens = lex_vcard(b"begin:vcard\r\nEND:VCARD\r\n").unwrap();
+        assert_eq!(tokens[0].token_type(), TokenType::Begin);
+        assert_eq!(tokens[0].literal(), b"VCARD");
+        assert_eq!(tokens[2].token_type(), TokenType::End);
+        assert_eq!(tokens[2].literal(), b"VCARD");
+    }
+
+    #[test]
+    fn leading_whitespace_on_a_line_is_rejected() {
+        // §3.3: a WSP-led line is a fold continuation, and after unfolding
+        // there's nothing left for a stray one to continue.
+        assert!(matches!(
+            lex_vcard(b" BEGIN:VCARD\r\n"),
+            Err(LexerError::UnknownLexeme { line: 0, got: b' ' })
+        ));
+    }
+
+    #[test]
+    fn a_fold_inside_a_group_is_unfolded_first() {
+        let tokens = lex_vcard(b"ite\r\n m1.TEL:1\r\n").unwrap();
+        assert_eq!(tokens[0].group(), Some(b"item1".as_slice()));
+    }
+
+    #[test]
+    fn a_multibyte_char_split_across_a_fold_is_restored() {
+        // §3.2: "Multi-octet characters MUST remain contiguous", and
+        // implementations SHOULD unfold so a split one is restored.
+        // "é" is C3 A9; the fold lands between the two bytes.
+        let tokens = lex_vcard(b"NOTE:caf\xC3\r\n \xA9\r\n").unwrap();
+        assert_eq!(tokens[0].literal(), ":caf\u{e9}".as_bytes());
+    }
+
+    #[test]
+    fn a_dot_inside_the_value_or_params_is_not_a_group() {
+        let tokens = lex_vcard(b"NOTE;X-A=b.c:1.2\r\n").unwrap();
+        assert_eq!(tokens[0].group(), None);
+        assert_eq!(tokens[0].lexeme(), b"NOTE");
+        assert_eq!(tokens[0].literal(), b";X-A=b.c:1.2");
+    }
+
+    #[test]
+    fn icalendar_mode_still_ignores_leading_whitespace_and_has_no_groups() {
+        let tokens = lex(b" SUMMARY:x\r\n").unwrap();
+        assert_eq!(tokens[0].lexeme(), b"SUMMARY");
+        assert_eq!(tokens[0].group(), None);
+    }
+}

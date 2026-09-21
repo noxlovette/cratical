@@ -10,6 +10,14 @@ pub enum LexerError {
     Crlf { line: usize },
     #[error("Expected ':' after BEGIN/END at line {line}")]
     ExpectedColon { line: usize },
+    /// A vCard property group (`group "."`) with no property name after
+    /// the dot, e.g. `item1.:value`.
+    #[error("Expected a property name after the group at line {line}")]
+    EmptyName { line: usize },
+    /// A vCard `BEGIN`/`END` line carrying a group, which RFC 6350 §6.1
+    /// doesn't allow (`group` only prefixes a property `name`).
+    #[error("BEGIN/END can't carry a group at line {line}")]
+    GroupedComponent { line: usize },
 }
 
 #[derive(Debug, Default)]
@@ -19,6 +27,10 @@ pub struct Lexer {
     start: usize,
     current: usize,
     line: usize,
+    /// vCard mode: a `.`-terminated group may prefix a property name (RFC
+    /// 6350 §3.3), and leading whitespace on a line is an error rather than
+    /// ignorable.
+    vcard: bool,
 }
 
 impl Lexer {
@@ -42,6 +54,22 @@ impl Lexer {
         }
     }
 
+    /// Creates a [`Lexer`] for vCard (RFC 6350) content.
+    ///
+    /// Same as [`Self::new`], except that a property name may be prefixed
+    /// by a group (`item1.TEL;TYPE=CELL:...`, RFC 6350 §3.3), which lands
+    /// on the [`Token`] instead of being an error, and that whitespace at
+    /// the start of a logical line is rejected. §3.3 defines no such
+    /// thing: once unfolded, a line beginning with WSP could only be a
+    /// continuation of a previous line that doesn't exist.
+    #[cfg(feature = "rfc-6350")]
+    pub fn vcard(src: &[u8]) -> Self {
+        Self {
+            vcard: true,
+            ..Self::new(src)
+        }
+    }
+
     /// scans the source for tokens
     pub fn scan(mut self) -> Result<Vec<Token>, LexerError> {
         while !self.is_at_end() {
@@ -61,7 +89,7 @@ impl Lexer {
                     self.add_token(TokenType::Crlf, None);
                     self.line += 1;
                 }
-                b' ' | b'\t' => {}
+                b' ' | b'\t' if !self.vcard => {}
                 c if c.is_ascii_alphanumeric() => self.line_content()?,
                 _ => {
                     return Err(LexerError::UnknownLexeme {
@@ -84,17 +112,34 @@ impl Lexer {
     /// remainder of the line ([`Self::property`]).
     fn line_content(&mut self) -> Result<(), LexerError> {
         self.name_chars();
+
+        // vCard: what we just scanned was a group if a `.` follows, and
+        // the property name only starts after it.
+        let mut group = None;
+        let mut name_start = self.start;
+        if self.vcard && self.peek() == b'.' {
+            group = Some(self.source[self.start..self.current].to_vec());
+            self.next();
+            name_start = self.current;
+            self.name_chars();
+            if self.current == name_start {
+                return Err(LexerError::EmptyName { line: self.line });
+            }
+        }
         // Owned rather than the `Cow` `fold_upper` returns: it borrows
         // `self.source`, and the match arms below need `&mut self`, which a
         // live borrow of one of `self`'s fields would block.
-        let name = Self::fold_upper(&self.source[self.start..self.current])
+        let name = Self::fold_upper(&self.source[name_start..self.current])
             .into_owned();
 
         match name.as_slice() {
+            b"BEGIN" | b"END" if group.is_some() => {
+                Err(LexerError::GroupedComponent { line: self.line })
+            }
             b"BEGIN" => self.component(TokenType::Begin),
             b"END" => self.component(TokenType::End),
             _ => {
-                self.property(&name);
+                self.property(&name, group.as_deref());
                 Ok(())
             }
         }
@@ -132,19 +177,19 @@ impl Lexer {
     /// `*(";" param) ":" value` — and hand it off whole. Splitting params
     /// from the value (honoring DQUOTE-ing) is the matching property
     /// type's job, not the lexer's; see `crate::properties::value_start`.
-    fn property(&mut self, name: &[u8]) {
+    fn property(&mut self, name: &[u8], group: Option<&[u8]>) {
         let rest_start = self.current;
         let rest = &self.source[self.current..];
         self.current +=
             memchr::memchr2(b'\r', b'\n', rest).unwrap_or(rest.len());
         let remainder = &self.source[rest_start..self.current];
 
-        self.tokens.push(Token::new(
-            TokenType::Property,
-            name,
-            Some(remainder),
-            self.line,
-        ));
+        let mut token =
+            Token::new(TokenType::Property, name, Some(remainder), self.line);
+        if let Some(group) = group {
+            token = token.with_group(group);
+        }
+        self.tokens.push(token);
     }
 
     /// advances past a run of name characters (`ALPHA` / `DIGIT` / `-`),

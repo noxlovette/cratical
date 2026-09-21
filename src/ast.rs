@@ -1,6 +1,6 @@
 mod lexer;
 pub mod parser;
-mod token;
+pub(crate) mod token;
 pub(crate) use lexer::{Lexer, LexerError};
 use parser::{ParseError, ParseResult};
 

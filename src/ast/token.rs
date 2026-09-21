@@ -48,6 +48,13 @@ pub struct Token {
     /// component name; for `Property` this is the raw, unparsed remainder
     /// of the content line. `None` for `Crlf`/`Eof`.
     literal: Vec<u8>,
+    /// The vCard property group (RFC 6350 §3.3 `group "."`) that prefixed
+    /// this property's name, e.g. `item1` in `item1.TEL:...`, exactly as
+    /// written (the group is case-insensitive, but the original case is
+    /// kept so it round-trips). Always `None` for iCalendar content, which
+    /// has no groups, and for anything but a
+    /// [`Property`](TokenType::Property).
+    group: Option<Vec<u8>>,
     line: usize,
 }
 
@@ -62,8 +69,22 @@ impl Token {
             token_type: t,
             lexeme: lex.to_vec(),
             literal: lit.map(|v| v.to_vec()).unwrap_or_default(),
+            group: None,
             line,
         }
+    }
+
+    /// Attaches the vCard property group this token was prefixed with.
+    #[cfg_attr(not(feature = "rfc-6350"), allow(dead_code))]
+    pub fn with_group(mut self, group: &[u8]) -> Self {
+        self.group = Some(group.to_vec());
+        self
+    }
+
+    /// The vCard property group prefixing this property, if any.
+    #[cfg_attr(not(feature = "rfc-6350"), allow(dead_code))]
+    pub fn group(&self) -> Option<&[u8]> {
+        self.group.as_deref()
     }
 
     pub fn token_type(&self) -> TokenType {

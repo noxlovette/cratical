@@ -18,14 +18,6 @@ pub use rrule::*;
 #[cfg(feature = "rfc-5546")]
 pub mod itip;
 
-/// vCard 4.0 (RFC 6350) and 3.0 (RFC 2426), the payloads CardDAV
-/// (RFC 6352) carries.
-///
-/// Deliberately separate from the iCalendar model: property names such as
-/// `UID`, `URL`, `CATEGORIES`, `SOURCE`, `NAME`, `TZ` and `GEO` exist in both
-/// formats with different value types, so this module has its own `Property`
-/// enum, builders and value and parameter types. Only server-side CardDAV
-/// (WebDAV, XML, queries, filters) is out of scope.
 #[cfg(feature = "rfc-6350")]
 pub mod vcard;
 

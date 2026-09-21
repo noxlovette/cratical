@@ -291,7 +291,7 @@ use crate::{
 /// `;`-separated `NAME=VALUE` segments, honoring DQUOTE-enclosed values (a
 /// `;` inside quotes doesn't end the segment) and dropping the empty piece
 /// before the leading `;`.
-fn param_segments(v: &[u8]) -> Vec<&[u8]> {
+pub(crate) fn param_segments(v: &[u8]) -> Vec<&[u8]> {
     let mut segments = Vec::new();
     let mut start = 0;
     let mut in_quotes = false;

@@ -36,10 +36,6 @@ rfc-9074 = []
 # a VCALENDAR against RFC 5546's per-METHOD component/property restriction
 # tables whenever METHOD names one of the 8 recognized iTIP methods.
 rfc-5546 = []
-# vCard, the payload CardDAV (RFC 6352) carries. This crate is payload-only
-# (no WebDAV/HTTP/XML), so "CardDAV support" means parsing, building,
-# validating and serializing vCard objects. Opt-in: plain calendar users
-# don't need it.
 # RFC 6350: vCard 4.0, the base of the `vcard` module.
 rfc-6350 = []
 # RFC 2426: vCard 3.0, plus 3.0 <-> 4.0 conversion. Implies `rfc-6350`
