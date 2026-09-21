@@ -38,6 +38,14 @@
   this crate implements — the `VLOCATION` sub-component nested inside
   `VALARM` (RFC 9074 §8's proximity extension) — since that's the only
   context this crate parses it in.
+- **`rfc-6350`** (opt-in, not a default feature) — **[RFC 6350](https://datatracker.ietf.org/doc/html/rfc6350)**:
+  vCard 4.0, the `vcard` module. This crate is payload-only, so this covers
+  parsing, building, validating and serializing the vCard objects a CardDAV
+  ([RFC 6352](https://datatracker.ietf.org/doc/html/rfc6352)) server carries,
+  not WebDAV/HTTP/XML.
+- **`rfc-2426`** (opt-in, not a default feature) — **[RFC 2426](https://datatracker.ietf.org/doc/html/rfc2426)**:
+  vCard 3.0 and 3.0 ↔ 4.0 conversion. Implies `rfc-6350`. CardDAV servers
+  MUST support 3.0.
 - **`rfc-5546`** — **[RFC 5546](https://datatracker.ietf.org/doc/html/rfc5546)**
   (iTIP): a typed `itip::Method` for the 8 scheduling methods
   (`PUBLISH`/`REQUEST`/`REPLY`/`ADD`/`CANCEL`/`REFRESH`/`COUNTER`/
