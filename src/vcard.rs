@@ -15,10 +15,7 @@
 //! property as an opaque `X-`/IANA passthrough, group included, until the
 //! typed properties land.
 
-use crate::{
-    ast::{Lexer, LexerError},
-    properties::ParameterError,
-};
+use crate::ast::{Lexer, LexerError};
 use thiserror::Error;
 
 pub mod params;
@@ -175,9 +172,13 @@ pub enum ParseError {
         received: Option<String>,
     },
 
-    /// A parameter segment wasn't `NAME=VALUE`.
+    /// A parameter that doesn't follow RFC 6350 §5.
     #[error(transparent)]
-    Parameter(#[from] ParameterError),
+    Param(#[from] params::ParamError),
+
+    /// A property value that doesn't follow RFC 6350 §4.
+    #[error(transparent)]
+    Value(#[from] values::ValueError),
 
     /// Text that isn't UTF-8.
     #[error(transparent)]

@@ -91,6 +91,11 @@ impl Version {
         self.value
     }
 
+    /// The parameters the property was written with.
+    pub fn params(&self) -> &Parameters {
+        &self.params
+    }
+
     fn parse(
         group: Option<Group>,
         remainder: &[u8],
@@ -138,6 +143,11 @@ macro_rules! passthrough_property {
             /// The value, exactly as written.
             pub fn value(&self) -> &Raw {
                 &self.value
+            }
+
+            /// The parameters the property was written with.
+            pub fn params(&self) -> &Parameters {
+                &self.params
             }
 
             fn parse(
@@ -214,6 +224,17 @@ impl Property {
             Self::Version(p) => p.group(),
             Self::Xprop(p) => p.group(),
             Self::Iana(p) => p.group(),
+        }
+    }
+}
+
+impl Property {
+    /// The parameters the property was written with.
+    pub fn params(&self) -> &Parameters {
+        match self {
+            Self::Version(p) => p.params(),
+            Self::Xprop(p) => p.params(),
+            Self::Iana(p) => p.params(),
         }
     }
 }

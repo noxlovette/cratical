@@ -270,12 +270,15 @@ fn unknown_and_x_properties_are_never_an_error() {
 }
 
 #[test]
-fn parameters_round_trip_untouched() {
+fn parameters_are_written_back_in_their_one_spelling() {
+    // Typed since #47: `TYPE="work,voice"` and `TYPE=work,voice` are the same
+    // parameter, so the quoted list is written as the plain one. The
+    // RFC 6868 caret-encoding of the extension parameter survives.
     let src = b"BEGIN:VCARD\r\nVERSION:4.0\r\nX-A;TYPE=\"work,voice\";X-B=^'q^':v\r\nEND:VCARD\r\n";
     let card = VCard::parse(src).unwrap();
     assert_eq!(
         card.properties()[0].to_string(),
-        "X-A;TYPE=\"work,voice\";X-B=^'q^':v"
+        "X-A;TYPE=work,voice;X-B=^'q^':v"
     );
 }
 

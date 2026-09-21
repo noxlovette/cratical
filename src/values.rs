@@ -851,7 +851,7 @@ impl Boolean {
 /// > Project XYZ Final Review\nConference Room - 3B\nCome Prepared.
 ///
 /// [Section 3.3.11](https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.11)
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Text(String);
 
 /// This value type might be used to reference binary
@@ -871,7 +871,7 @@ pub struct Text(String);
 /// > http://example.com/my-report.txt
 ///
 /// [Section 3.3.13](https://datatracker.ietf.org/doc/html/rfc5545#section-3.3.13)
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Uri(Url);
 
 /// If the property permits, multiple "integer" values are
@@ -2154,7 +2154,7 @@ mod recurrence {
 ///
 /// As used in this crate, we only validate that there is a type and subtype,
 /// separated by a slash
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct MediaType {
     media_type: Text,
     subtype: Text,
