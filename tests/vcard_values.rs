@@ -1235,3 +1235,17 @@ fn clientpidmap_needs_digits_a_semicolon_and_a_uri() {
         "99999999999;urn:uuid:3df403f4-5924-4bb7-b077-3c711d9eb34b"
     );
 }
+
+#[test]
+fn clientpidmap_source_identifier_is_strictly_positive() {
+    // §6.7.7: "PID source identifiers MUST be strictly positive. Zero is
+    // not allowed."
+    rejects!(ClientPidMap, "0;urn:uuid:1");
+    assert!(ClientPidMap::new(0, Uri::parse("urn:uuid:1").unwrap()).is_err());
+    assert_eq!(
+        ClientPidMap::new(1, Uri::parse("urn:uuid:1").unwrap())
+            .unwrap()
+            .pid(),
+        1
+    );
+}

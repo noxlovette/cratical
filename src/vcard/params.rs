@@ -222,7 +222,7 @@ pub enum ValueDataType {
 }
 
 impl ValueDataType {
-    fn token(&self) -> &str {
+    pub(crate) fn token(&self) -> &str {
         match self {
             Self::Text => "text",
             Self::Uri => "uri",

@@ -82,7 +82,7 @@ fn write_parts(
 /// > Stevenson;John;Philip,Paul;Dr.;Jr.,M.D.,A.C.P.
 ///
 /// [Section 6.2.2](https://datatracker.ietf.org/doc/html/rfc6350#section-6.2.2)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Name {
     parts: [Vec<Text>; 5],
     written: usize,
@@ -167,7 +167,7 @@ impl fmt::Display for Name {
 /// > ;;123 Main Street;Any Town;CA;91921-1234;U.S.A.
 ///
 /// [Section 6.3.1](https://datatracker.ietf.org/doc/html/rfc6350#section-6.3.1)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Address {
     parts: [Vec<Text>; 7],
     written: usize,
@@ -255,7 +255,7 @@ impl fmt::Display for Address {
 /// > ABC\, Inc.;North American Division;Marketing
 ///
 /// [Section 6.6.4](https://datatracker.ietf.org/doc/html/rfc6350#section-6.6.4)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Organization {
     name: Text,
     units: Vec<Text>,
@@ -374,7 +374,7 @@ impl Sex {
 /// > ;it's complicated
 ///
 /// [Section 6.2.7](https://datatracker.ietf.org/doc/html/rfc6350#section-6.2.7)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Gender {
     sex: Option<Sex>,
     identity: Option<Text>,
@@ -451,16 +451,23 @@ impl fmt::Display for Gender {
 /// > 1;urn:uuid:3df403f4-5924-4bb7-b077-3c711d9eb34b
 ///
 /// [Section 6.7.7](https://datatracker.ietf.org/doc/html/rfc6350#section-6.7.7)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientPidMap {
     pid: u32,
     uri: Uri,
 }
 
 impl ClientPidMap {
-    /// Builds a map entry.
-    pub fn new(pid: u32, uri: Uri) -> Self {
-        Self { pid, uri }
+    /// Builds a map entry. "PID source identifiers MUST be strictly
+    /// positive. Zero is not allowed."
+    pub fn new(pid: u32, uri: Uri) -> Result<Self, ValueError> {
+        if pid == 0 {
+            return Err(malformed(
+                "a strictly positive PID source identifier",
+                b"0",
+            ));
+        }
+        Ok(Self { pid, uri })
     }
 
     /// The source identifier, as used in the second field of `PID`.
@@ -483,10 +490,8 @@ impl TryFrom<&[u8]> for ClientPidMap {
         if pid.is_empty() || !pid.iter().all(u8::is_ascii_digit) {
             return Err(err());
         }
-        Ok(Self {
-            pid: std::str::from_utf8(pid)?.parse().map_err(|_| err())?,
-            uri: Uri::try_from(uri)?,
-        })
+        let pid = std::str::from_utf8(pid)?.parse().map_err(|_| err())?;
+        Self::new(pid, Uri::try_from(uri)?)
     }
 }
 

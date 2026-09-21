@@ -15,10 +15,12 @@
 //! escapes them, which is valid everywhere and required inside a list or a
 //! structured value.
 
+mod composite;
 mod datetime;
 mod structured;
 
 pub use crate::values::{Binary, MediaType, Text, Uri};
+pub use composite::{DateAndOrTimeOrText, Kind, TextOrUri, Timezone, Uid};
 pub use datetime::{
     Date, DateAndOrTime, DateTime, Time, Timestamp, UtcOffset, Zone,
 };
@@ -168,7 +170,7 @@ impl fmt::Display for Raw {
 /// > this is one value,this is another
 ///
 /// [Section 4](https://datatracker.ietf.org/doc/html/rfc6350#section-4)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct List<T>(Vec<T>);
 
 impl<T> List<T> {

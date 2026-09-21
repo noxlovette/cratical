@@ -10,10 +10,11 @@
 //! parameters from them. Only server-side CardDAV (WebDAV, XML, queries,
 //! filters) is out of scope.
 //!
-//! Only the parsing layer exists so far: [`VCard::parse`] and
-//! [`VCard::parse_stream`] read a vCard's `VERSION` and keep every other
-//! property as an opaque `X-`/IANA passthrough, group included, until the
-//! typed properties land.
+//! So far [`VCard::parse`] and [`VCard::parse_stream`] read a vCard's
+//! `VERSION` and every property of RFC 6350 §6 as its own type in
+//! [`properties`], group included; `X-` and unknown properties are kept
+//! whole. What needs the whole card (cardinality, required properties, what
+//! properties require of each other) isn't checked yet.
 
 use crate::ast::{Lexer, LexerError};
 use thiserror::Error;
@@ -175,6 +176,38 @@ pub enum ParseError {
     /// A parameter that doesn't follow RFC 6350 §5.
     #[error(transparent)]
     Param(#[from] params::ParamError),
+
+    /// A `VALUE` parameter naming a value type the property can't have,
+    /// e.g. `FN;VALUE=uri`.
+    #[error("The {property} property can't have VALUE={value}")]
+    ValueType {
+        /// The property.
+        property: &'static str,
+        /// The value type that was named.
+        value: String,
+    },
+
+    /// A `TYPE` value that RFC 6350 §5.6 reserves for another property:
+    /// `type-param-tel` "MUST NOT be used with a property other than TEL",
+    /// nor `type-param-related` with one other than RELATED.
+    #[error("TYPE={value} is only for {only}, not {property}")]
+    TypeValue {
+        /// The property.
+        property: &'static str,
+        /// The `TYPE` value.
+        value: String,
+        /// The one property that may have it.
+        only: &'static str,
+    },
+
+    /// A parameter the RFC forbids on the property.
+    #[error("The {param} parameter can't be applied to {property}")]
+    ParamNotAllowed {
+        /// The property.
+        property: &'static str,
+        /// The parameter.
+        param: &'static str,
+    },
 
     /// A property value that doesn't follow RFC 6350 §4.
     #[error(transparent)]

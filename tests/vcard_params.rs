@@ -686,8 +686,8 @@ fn card_with(line: &str) -> VCard {
 fn a_property_carries_its_typed_parameters() {
     let card =
         card_with("TEL;TYPE=\"work,voice\";PREF=1;PID=1.1:tel:+1-555-555-5555");
-    let Property::Iana(tel) = &card.properties()[0] else {
-        panic!("TEL isn't typed yet, so it's a passthrough");
+    let Property::Telephone(tel) = &card.properties()[0] else {
+        panic!("expected TEL");
     };
     let params = tel.params();
     assert_eq!(params.pref().unwrap().value(), 1);
@@ -729,9 +729,9 @@ fn a_bad_parameter_fails_the_card() {
 #[test]
 fn a_quoted_colon_in_a_parameter_does_not_start_the_value() {
     let card = card_with("ADR;LABEL=\"a: b\":;;street");
-    let Property::Iana(adr) = &card.properties()[0] else {
-        panic!("ADR isn't typed yet");
+    let Property::Address(adr) = &card.properties()[0] else {
+        panic!("expected ADR");
     };
     assert_eq!(adr.params().label().unwrap().as_str(), "a: b");
-    assert_eq!(adr.value().as_str(), ";;street");
+    assert_eq!(adr.value().street()[0].as_str(), "street");
 }
