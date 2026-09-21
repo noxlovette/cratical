@@ -985,12 +985,12 @@ impl TimeZoneIdentifier {
         Self(tz.name().into())
     }
 
-    /// The raw `TZID` text — used by the calendar-wide check that this
+    /// The raw `TZID` text — also used by the calendar-wide check that this
     /// parameter's value matches a `VTIMEZONE` component's own `TZID`
     /// property elsewhere in the object (RFC 5545 §3.2.19), and to compare
     /// two `TZID` parameters for equality (e.g. `EXDATE`/`RDATE` against
     /// their component's `DTSTART`) without requiring either to resolve.
-    pub(crate) fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         &self.0
     }
 
@@ -1584,6 +1584,75 @@ pub enum ParamError {
     /// Encoding error surfaced while decoding a param's raw bytes as UTF-8.
     #[error(transparent)]
     Utf8(#[from] std::str::Utf8Error),
+}
+
+/// Adds a `value()` read accessor and a `Deref` to the wrapped value for a
+/// single-value parameter newtype, mirroring `impl_value_accessor!` on the
+/// property side. The inner field stays private.
+macro_rules! impl_param_value {
+    ($ty:ident, $value_ty:ty) => {
+        impl $ty {
+            /// Returns the parameter's parsed value.
+            pub fn value(&self) -> &$value_ty {
+                &self.0
+            }
+        }
+
+        impl std::ops::Deref for $ty {
+            type Target = $value_ty;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+    };
+}
+
+/// Like [`impl_param_value!`], for a parameter whose value is a
+/// comma-separated list: reads as a slice.
+macro_rules! impl_param_list_value {
+    ($ty:ident, $item_ty:ty) => {
+        impl $ty {
+            /// Returns the parameter's parsed values.
+            pub fn value(&self) -> &[$item_ty] {
+                &self.0
+            }
+        }
+
+        impl std::ops::Deref for $ty {
+            type Target = [$item_ty];
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+    };
+}
+
+impl_param_value!(Altrep, Uri);
+impl_param_value!(CommonName, Text);
+impl_param_value!(DirectoryEntryReference, Uri);
+impl_param_value!(Fmttype, MediaType);
+impl_param_value!(SentBy, CalendarUserAddress);
+impl_param_value!(Label, Text);
+impl_param_list_value!(Delegators, CalendarUserAddress);
+impl_param_list_value!(Delegatees, CalendarUserAddress);
+impl_param_list_value!(Member, CalendarUserAddress);
+impl_param_list_value!(ImageDisplay, ImageDisplayValue);
+impl_param_list_value!(Feature, FeatureValue);
+
+impl Rsvp {
+    /// Returns `true` if a reply was requested (`RSVP=TRUE`).
+    pub fn value(&self) -> bool {
+        *self.0
+    }
+}
+
+impl Language {
+    /// The language tag as text, e.g. `"en-US"`.
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
 }
 
 #[cfg(test)]

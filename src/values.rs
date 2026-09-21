@@ -2187,6 +2187,16 @@ impl MediaType {
             subtype: subtype.into(),
         }
     }
+
+    /// The top-level type, e.g. `application` in `application/msword`.
+    pub fn media_type(&self) -> &str {
+        &self.media_type
+    }
+
+    /// The subtype, e.g. `msword` in `application/msword`.
+    pub fn subtype(&self) -> &str {
+        &self.subtype
+    }
 }
 
 impl std::fmt::Display for MediaType {
@@ -2272,6 +2282,12 @@ impl CalendarUserAddress {
         } else {
             Ok(Self(uri))
         }
+    }
+
+    /// The underlying `mailto:` URI. Its path is the bare address, e.g.
+    /// `jsmith@example.com` for `mailto:jsmith@example.com`.
+    pub fn uri(&self) -> &Uri {
+        &self.0
     }
 }
 

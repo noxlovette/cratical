@@ -211,6 +211,13 @@ pub struct Categories {
 
 impl_try_from_bytes_list!(Categories, Text, CategoriesParams);
 
+impl Categories {
+    /// Returns the property's list of categories.
+    pub fn value(&self) -> &[Text] {
+        &self.value
+    }
+}
+
 /// Builder for [`Categories`].
 #[derive(Debug, Default)]
 pub struct CategoriesBuilder {

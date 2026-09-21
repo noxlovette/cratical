@@ -69,10 +69,10 @@ impl ExceptionDateTimes {
         }
     }
 
-    /// The parsed `EXDATE` values — used by `build()` to cross-check their
-    /// value type (DATE vs DATE-TIME) against the component's `DTSTART`
-    /// (RFC 5545 §3.8.5.1).
-    pub(crate) fn value(&self) -> &[DateOrDatetime] {
+    /// The parsed `EXDATE` values. Also used by `build()` to cross-check
+    /// their value type (DATE vs DATE-TIME) against the component's
+    /// `DTSTART` (RFC 5545 §3.8.5.1).
+    pub fn value(&self) -> &[DateOrDatetime] {
         &self.value
     }
 
@@ -150,10 +150,10 @@ impl RecurrenceDateTimes {
         }
     }
 
-    /// The parsed `RDATE` values — used by `build()` to cross-check their
-    /// value type (DATE vs DATE-TIME vs PERIOD) against the component's
-    /// `DTSTART` (RFC 5545 §3.8.5.2).
-    pub(crate) fn value(&self) -> &[DateTimePeriod] {
+    /// The parsed `RDATE` values, each a `DATE`, `DATE-TIME`, or `PERIOD`.
+    /// Also used by `build()` to cross-check their value type against the
+    /// component's `DTSTART` (RFC 5545 §3.8.5.2).
+    pub fn value(&self) -> &[DateTimePeriod] {
         &self.value
     }
 
